@@ -1,0 +1,6 @@
+{
+  "name": "EAAR - Autonomous Agricultural Rover",
+  "description": "Edge-AI Enabled Autonomous Agricultural Rover for crop-row navigation, plant disease detection, environmental monitoring, and targeted treatment.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

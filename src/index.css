@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-heading: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: #050b07;
+    color: #e0ece4;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: var(--font-heading);
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+/* 3D Rover CSS Transformation Engine */
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.perspective-1200 {
+  perspective: 1200px;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+/* Custom Scrollbar for Agricultural Dashboard */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #08120a;
+}
+::-webkit-scrollbar-thumb {
+  background: #193820;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a5a35;
+}
+
+/* Subtle glowing pulse animations */
+@keyframes signalPulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes leafDrift {
+  0% {
+    transform: translateY(0px) rotate(0deg) translateX(0px);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.45;
+  }
+  85% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translateY(-800px) rotate(360deg) translateX(50px);
+    opacity: 0;
+  }
+}
+
+.animate-leaf {
+  animation: leafDrift linear infinite;
+}
+
+@keyframes scanLine {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(400%);
+  }
+}
+
+.animate-scan {
+  animation: scanLine 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes radarSweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-radar {
+  animation: radarSweep 4s linear infinite;
+}
+
+@keyframes liquidWave {
+  0% {
+    transform: translateX(0) translateZ(0) scaleY(1);
+  }
+  50% {
+    transform: translateX(-25%) translateZ(0) scaleY(1.05);
+  }
+  100% {
+    transform: translateX(-50%) translateZ(0) scaleY(1);
+  }
+}
+
+.animate-wave {
+  animation: liquidWave 6s ease-in-out infinite;
+}

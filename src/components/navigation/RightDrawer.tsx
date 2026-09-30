@@ -1,0 +1,263 @@
+import React from 'react';
+import { useRover } from '../../context/RoverContext';
+import { LANGUAGES } from '../../i18n/translations';
+import { SupportedLanguage } from '../../types';
+import {
+  X,
+  Home,
+  Layers,
+  Activity,
+  Cpu,
+  Navigation,
+  Globe,
+  Mic,
+  MicOff,
+  Database,
+  SlidersHorizontal,
+  ChevronRight,
+  Radio,
+  FileCode,
+} from 'lucide-react';
+
+interface RightDrawerProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => {
+  const {
+    activeSection,
+    setActiveSection,
+    language,
+    setLanguage,
+    t,
+    isVoiceListening,
+    voiceTranscript,
+    voiceStatusMessage,
+    startVoiceListening,
+    stopVoiceListening,
+    setIsConfigModalOpen,
+    setIsSimulatorModalOpen,
+    connectionMode,
+    isSupabaseLive,
+  } = useRover();
+
+  if (!isOpen) return null;
+
+  const navLinks = [
+    { id: 'home', labelKey: 'nav_home', icon: Home },
+    { id: 'architecture', labelKey: 'nav_architecture', icon: Layers },
+    { id: 'results', labelKey: 'nav_results', icon: Activity },
+    { id: 'devices', labelKey: 'nav_devices', icon: Cpu },
+    { id: 'live-status', labelKey: 'nav_live_status', icon: Navigation },
+  ];
+
+  const handleNavClick = (id: string) => {
+    setActiveSection(id);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className="absolute inset-0 bg-black/70 backdrop-blur-xs transition-opacity duration-300"
+      />
+
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+        {/* Sliding Panel */}
+        <div className="w-screen max-w-md bg-[#07120a] border-l border-emerald-900/40 text-slate-200 shadow-2xl flex flex-col justify-between overflow-y-auto">
+          {/* Header */}
+          <div className="p-6 border-b border-emerald-950 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-500/50 flex items-center justify-center">
+                <span className="font-heading font-extrabold text-sm text-emerald-400">E</span>
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-white">EAAR Console</h3>
+                <span className="text-[11px] font-mono text-emerald-400/80">
+                  {connectionMode === 'supabase'
+                    ? isSupabaseLive
+                      ? '● Supabase Realtime'
+                      : '○ Reconnecting Supabase'
+                    : '● Development Demo Mode'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg bg-[#0e2113] text-slate-400 hover:text-white hover:bg-emerald-900/50 transition-colors"
+              aria-label="Close drawer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Navigation Links */}
+          <div className="px-6 py-4 flex-1 space-y-6">
+            <div>
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block mb-2">
+                Navigation
+              </span>
+              <div className="space-y-1">
+                {navLinks.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeSection === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleNavClick(item.id)}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-600/40'
+                          : 'text-slate-300 hover:bg-[#0c1e11] hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
+                        <span>{t(item.labelKey)}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-600" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Language Settings (English, Kannada, Hindi, Telugu, Tamil) */}
+            <div className="pt-2 border-t border-emerald-950">
+              <div className="flex items-center gap-2 mb-2.5">
+                <Globe className="w-4 h-4 text-cyan-400" />
+                <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                  {t('language_select')}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => setLanguage(lang.code as SupportedLanguage)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors border ${
+                      language === lang.code
+                        ? 'bg-emerald-900/50 border-emerald-500/80 text-emerald-300'
+                        : 'bg-[#0a170e] border-emerald-950 text-slate-400 hover:text-white hover:border-emerald-800'
+                    }`}
+                  >
+                    <div className="font-semibold">{lang.nativeName}</div>
+                    <div className="text-[10px] text-slate-500">{lang.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Voice Command Section */}
+            <div className="pt-2 border-t border-emerald-950">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Mic className="w-4 h-4 text-amber-400" />
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                    {t('voice_command')}
+                  </span>
+                </div>
+                {isVoiceListening && (
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                  </span>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#09170e] border border-emerald-900/50 space-y-2.5">
+                <p className="text-xs text-slate-300 font-body">
+                  {isVoiceListening ? t('voice_listening') : t('voice_ready')}
+                </p>
+
+                {voiceTranscript && (
+                  <div className="p-2 rounded bg-black/40 border border-emerald-800/40 text-xs font-mono text-cyan-300">
+                    "{voiceTranscript}"
+                  </div>
+                )}
+
+                {voiceStatusMessage && (
+                  <p className="text-[11px] text-amber-300/80 font-mono">
+                    {voiceStatusMessage}
+                  </p>
+                )}
+
+                <button
+                  onClick={isVoiceListening ? stopVoiceListening : startVoiceListening}
+                  className={`w-full py-2 px-3 rounded-lg text-xs font-mono font-medium flex items-center justify-center gap-2 transition-colors ${
+                    isVoiceListening
+                      ? 'bg-rose-950/60 border border-rose-600/60 text-rose-300 hover:bg-rose-900/50'
+                      : 'bg-emerald-900/40 border border-emerald-600/50 text-emerald-300 hover:bg-emerald-800/50'
+                  }`}
+                >
+                  {isVoiceListening ? (
+                    <>
+                      <MicOff className="w-3.5 h-3.5" />
+                      <span>Stop Listening</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-3.5 h-3.5" />
+                      <span>{t('voice_mic_tap')}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Backend & Tools Quick Action */}
+            <div className="pt-2 border-t border-emerald-950 space-y-2">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block">
+                Backend & Field Operations
+              </span>
+
+              <button
+                onClick={() => {
+                  onClose();
+                  setIsConfigModalOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-3 rounded-lg bg-[#09170e] border border-emerald-900/50 text-xs text-slate-300 hover:border-emerald-600 hover:text-white transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Database className="w-4 h-4 text-cyan-400" />
+                  <div className="text-left">
+                    <div className="font-medium text-white">{t('supabase_settings')}</div>
+                    <div className="text-[10px] text-slate-400">View credentials & SQL schema</div>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-500" />
+              </button>
+
+              <button
+                onClick={() => {
+                  onClose();
+                  setIsSimulatorModalOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-3 rounded-lg bg-[#09170e] border border-emerald-900/50 text-xs text-slate-300 hover:border-emerald-600 hover:text-white transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
+                  <div className="text-left">
+                    <div className="font-medium text-white">{t('simulator_title')}</div>
+                    <div className="text-[10px] text-slate-400">{t('simulator_desc')}</div>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+          </div>
+
+          {/* Footer note */}
+          <div className="p-6 border-t border-emerald-950 bg-[#050e07] text-[11px] font-mono text-slate-500 flex items-center justify-between">
+            <span>EAAR Core · v3.2</span>
+            <span>2026 Field Edition</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
