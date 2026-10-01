@@ -459,6 +459,17 @@ void setup() {
   prefs.begin("agribot", false);
   ledBrightness = prefs.getUChar("ledBright", 255);
   strip.setBrightness(ledBrightness);
+
+  // Default startup lighting: MAROON.
+  currentR = 128;
+  currentG = 0;
+  currentB = 32;
+  snakeActive = false;
+  fadeActive = false;
+  djActive = false;
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(currentR, currentG, currentB));
+  }
   strip.show();
   forwardBackwardSpeed = prefs.getUChar("fbSpeed", DEFAULT_SPEED);
   leftRightSpeed = prefs.getUChar("lrSpeed", DEFAULT_TURN_SPEED);
