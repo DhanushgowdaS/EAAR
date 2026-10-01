@@ -428,9 +428,18 @@ export const NavigationControllerSection: React.FC = () => {
     };
   }, [settingsOpen, stop]);
 
+  const cancelMovementHeartbeat = () => {
+    if (commandHeartbeatRef.current) window.clearInterval(commandHeartbeatRef.current);
+    commandHeartbeatRef.current = null;
+    stopBurstTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    stopBurstTimersRef.current = [];
+    setActiveCommand('S');
+  };
+
   const changeRoverMode = (nextMode: RoverMode) => {
-    stop();
+    cancelMovementHeartbeat();
     setRoverMode(nextMode);
+
     if (nextMode === 'training') {
       setTrainingEnded(false);
       setFlashRequested(false);
@@ -440,25 +449,26 @@ export const NavigationControllerSection: React.FC = () => {
     } else {
       void sendToEsp32('S');
     }
+
     emitMode(nextMode);
   };
 
   const endTraining = () => {
-    stop();
+    cancelMovementHeartbeat();
     setTrainingEnded(true);
     emitAction('end-training');
     void sendToEsp32('E');
   };
 
   const storeToFlash = () => {
-    stop();
+    cancelMovementHeartbeat();
     setFlashRequested(true);
     emitAction('store-to-flash');
     void sendToEsp32('M');
   };
 
   const deleteStoredRoute = () => {
-    stop();
+    cancelMovementHeartbeat();
     setFlashRequested(false);
     setTrainingEnded(false);
     setRoverMode('manual');
