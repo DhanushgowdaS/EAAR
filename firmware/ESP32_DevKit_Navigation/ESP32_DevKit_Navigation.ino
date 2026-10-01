@@ -96,6 +96,54 @@ bool isNavigationCommand(char command) {
          command == 'D';
 }
 
+bool isLightingCommand(char command) {
+  return command == '1' || command == '2' ||
+         command == '3' || command == '4' ||
+         command == '5' || command == '6' ||
+         command == '7' || command == '8' ||
+         command == '9' || command == '0' ||
+         command == 'X';
+}
+
+void handleLightingCommand(char command) {
+  switch (command) {
+    case '1': setColor(255, 0, 0); Serial.println("LIGHTING: ALERT / RED"); break;
+    case '2': setColor(0, 255, 0); Serial.println("LIGHTING: READY / GREEN"); break;
+    case '3': setColor(0, 0, 255); Serial.println("LIGHTING: ACTIVE / BLUE"); break;
+    case '4': setColor(255, 255, 0); Serial.println("LIGHTING: TRAINING / YELLOW"); break;
+    case '5': setColor(255, 190, 20); Serial.println("LIGHTING: NIGHT / WARM"); break;
+    case '6': setColor(128, 0, 32); Serial.println("LIGHTING: HARVEST / MAROON"); break;
+    case '7': setColor(0, 130, 140); Serial.println("LIGHTING: SCAN / PEACOCK"); break;
+    case '8': setColor(0, 0, 0); Serial.println("LIGHTING: OFF"); break;
+    case '9':
+      fadeActive = false;
+      djActive = false;
+      snakeActive = true;
+      snakeGrowing = true;
+      snakeStep = 0;
+      lastSnakeStep = millis();
+      Serial.println("LIGHTING: SNAKE");
+      break;
+    case '0':
+      snakeActive = false;
+      djActive = false;
+      fadeActive = true;
+      fadeHue = 0;
+      lastFadeStep = millis();
+      Serial.println("LIGHTING: FADE");
+      break;
+    case 'X':
+    case 'x':
+      snakeActive = false;
+      fadeActive = false;
+      djActive = true;
+      djHue = 0;
+      lastDjStep = millis();
+      Serial.println("LIGHTING: DJ");
+      break;
+  }
+}
+
 void sendCorsHeaders() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.sendHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -121,6 +169,20 @@ void handleCommand() {
   }
 
   char command = cmd[0];
+
+  if (isLightingCommand(command) || command == 'x') {
+    Serial.println();
+    Serial.println("================================");
+    Serial.println(" WEBSITE LIGHTING COMMAND");
+    Serial.print("COMMAND: ");
+    Serial.println(command);
+    Serial.println("SOURCE: EAAR WEBSITE -> WIFI -> ESP32 DEVKIT");
+    Serial.println("================================");
+    handleLightingCommand(command);
+    server.send(200, "application/json",
+                "{"ok":true,"command":"" + String(command) + "","type":"lighting","device":"EAAR-ESP32-DEVKIT"}");
+    return;
+  }
 
   Serial.println();
   Serial.println("================================");
@@ -287,8 +349,9 @@ void setup() {
   Serial.println("M = Save Route");
   Serial.println("A = Automatic Mode");
   Serial.println("D = Delete Flash");
-  Serial.println("Colors: red green blue yellow moon maroon peacock off");
-  Serial.println("Effects: snake fade dj");
+  Serial.println("LIGHTING: 1 Red | 2 Green | 3 Blue | 4 Yellow | 5 Warm");
+  Serial.println("LIGHTING: 6 Maroon | 7 Peacock | 8 Off");
+  Serial.println("LIGHTING: 9 Snake | 0 Fade | X DJ");
   Serial.println("================================");
   Serial.println("WIFI READY");
   Serial.println("Website -> Wi-Fi -> DevKit");
@@ -341,11 +404,13 @@ void loop() {
     }
 
     if (isNavigationCommand(btCommand) ||
+        isLightingCommand(btCommand) ||
         btCommand == 'f' || btCommand == 'b' ||
         btCommand == 'l' || btCommand == 'r' ||
         btCommand == 's' || btCommand == 't' ||
         btCommand == 'm' || btCommand == 'a' ||
-        btCommand == 'd' || btCommand == 'e') {
+        btCommand == 'd' || btCommand == 'e' ||
+        btCommand == 'x') {
 
       Serial.println();
       Serial.println("================================");
@@ -355,7 +420,11 @@ void loop() {
       Serial.println("SOURCE: HC-05 -> ESP32 DEVKIT");
       Serial.println("================================");
 
-      handleMotorCommand(btCommand);
+      if (isLightingCommand(btCommand) || btCommand == 'x') {
+        handleLightingCommand(btCommand);
+      } else {
+        handleMotorCommand(btCommand);
+      }
     }
   }
 
