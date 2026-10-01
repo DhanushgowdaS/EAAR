@@ -67,6 +67,15 @@ interface RoverContextType {
 
 const RoverContext = createContext<RoverContextType | undefined>(undefined);
 
+const mapEnvironmentReading = (row: any): EnvironmentReading => ({
+  id: row.id !== undefined && row.id !== null ? String(row.id) : undefined,
+  temperature: Number(row.temperature),
+  humidity: Number(row.humidity),
+  soil_moisture: Number(row.soil_moisture),
+  device_id: row.device_id || 'ESP32-S3-ACT-01',
+  timestamp: row.created_at || row.timestamp || new Date().toISOString(),
+});
+
 export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeSection, setActiveSection] = useState<string>('home');
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
@@ -143,23 +152,26 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       try {
         setSupabaseError(null);
 
-        // Fetch initial recent readings from Supabase
+        // Fetch initial recent readings from the actual environment_readings schema.
         const { data: envData, error: envError } = await client
           .from('environment_readings')
           .select('*')
-          .order('timestamp', { ascending: false })
+          .order('created_at', { ascending: false })
           .limit(15);
 
         if (envError) {
           console.warn('Supabase env read error:', envError.message);
           setSupabaseError(`Supabase query notice: ${envError.message}`);
         } else if (envData && envData.length > 0 && isMounted) {
-          setEnvironment(envData[0]);
-          setEnvironmentHistory(envData.reverse());
-          setLastPacketTimestamp(envData[0].timestamp);
+          const history = envData.map(mapEnvironmentReading).reverse();
+          const latest = history[history.length - 1];
+          setEnvironment(latest);
+          setEnvironmentHistory(history);
+          setLastPacketTimestamp(latest.timestamp);
         } else if (isMounted) {
-          // If no data exists yet, rule: "Display 'Waiting for data' instead of inventing sensor values"
           setEnvironment(null);
+          setEnvironmentHistory([]);
+          setLastPacketTimestamp(null);
         }
 
         // Fetch devices
@@ -208,18 +220,16 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Setup Realtime Channel
         const channel = client
           .channel('eaar_realtime_stream')
-          // Environment readings from ESP32-S3
           .on(
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'environment_readings' },
             (payload) => {
               if (!isMounted) return;
-              const newReading = payload.new as EnvironmentReading;
+              const newReading = mapEnvironmentReading(payload.new);
               setEnvironment(newReading);
-              setLastPacketTimestamp(newReading.timestamp || new Date().toISOString());
+              setLastPacketTimestamp(newReading.timestamp);
               setEnvironmentHistory((prev) => [...prev.slice(-19), newReading]);
 
-              // Update ESP32-S3 device heartbeat
               setDevices((prev) =>
                 prev.map((d) =>
                   d.device_type === 'esp32_s3'
@@ -229,7 +239,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               );
             }
           )
-          // Robot Status updates from ESP32 DevKit
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'robot_status' },
@@ -238,7 +247,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               const newStatus = payload.new as RobotStatus;
               setRobotStatus(newStatus);
               setLastPacketTimestamp(newStatus.timestamp || new Date().toISOString());
-              // Update ESP32 DevKit device heartbeat
               setDevices((prev) =>
                 prev.map((d) =>
                   d.device_type === 'esp32_devkit'
@@ -248,7 +256,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               );
             }
           )
-          // AI Results from Raspberry Pi Edge AI Brain
           .on(
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'ai_results' },
@@ -271,7 +278,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               setActiveAiResult(enriched);
               setLastPacketTimestamp(newAi.timestamp || new Date().toISOString());
 
-              // Update Raspberry Pi device heartbeat
               setDevices((prev) =>
                 prev.map((d) =>
                   d.device_type === 'raspberry_pi'
@@ -281,7 +287,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               );
             }
           )
-          // Device status updates
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'devices' },
@@ -329,7 +334,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         prev.map((dev) => {
           const lastSeenMs = new Date(dev.last_seen).getTime();
           const diffMinutes = (now - lastSeenMs) / 60000;
-          // If in supabase mode and last seen was > 10 mins ago, mark standby
           if (connectionMode === 'supabase' && diffMinutes > 10 && dev.status === 'online') {
             return { ...dev, status: 'standby' };
           }
@@ -354,10 +358,15 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (connectionMode === 'supabase' && supabase) {
         try {
-          const { error } = await supabase.from('environment_readings').insert([fullReading]);
+          const { error } = await supabase.from('environment_readings').insert([
+            {
+              temperature: fullReading.temperature,
+              humidity: fullReading.humidity,
+              soil_moisture: fullReading.soil_moisture,
+            },
+          ]);
           if (error) {
             console.error('Failed to insert into Supabase:', error);
-            // Fall back to local update
             setEnvironment(fullReading);
             setEnvironmentHistory((prev) => [...prev.slice(-19), fullReading]);
             return false;
@@ -370,11 +379,9 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return false;
         }
       } else {
-        // Demo Mode update
         setEnvironment(fullReading);
         setEnvironmentHistory((prev) => [...prev.slice(-19), fullReading]);
         setLastPacketTimestamp(fullReading.timestamp);
-        // Refresh ESP32-S3 heartbeat
         setDevices((prev) =>
           prev.map((d) =>
             d.device_type === 'esp32_s3'
@@ -442,7 +449,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setAiResults((prev) => [fullAiResult, ...prev.slice(0, 19)]);
         setActiveAiResult(fullAiResult);
         setLastPacketTimestamp(fullAiResult.timestamp);
-        // Refresh Raspberry Pi heartbeat
         setDevices((prev) =>
           prev.map((d) =>
             d.device_type === 'raspberry_pi'
@@ -513,7 +519,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const transcript = event.results[current][0].transcript;
         setVoiceTranscript(transcript);
 
-        // Immediate navigational commands
         const lower = transcript.toLowerCase();
         if (lower.includes('home')) {
           setActiveSection('home');
@@ -531,7 +536,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setActiveSection('live-status');
         }
 
-        // Delegate questions to Gemini voice query API
         setVoiceStatusMessage('Analyzing with Gemini Voice AI...');
         try {
           const res = await fetch('/api/gemini/voice-query', {
@@ -552,7 +556,6 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const answer = data.answer || 'Command received.';
             setVoiceStatusMessage(answer);
 
-            // Read aloud back to farmer via speech synthesis
             if (typeof window !== 'undefined' && window.speechSynthesis) {
               window.speechSynthesis.cancel();
               const utterance = new SpeechSynthesisUtterance(answer.slice(0, 180));
