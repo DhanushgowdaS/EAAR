@@ -306,10 +306,38 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                 <p className="mt-2 text-[9px] text-slate-500 font-mono">
                   Sends the selected lighting command to the ESP32 DevKit.
                 </p>
+                <div className="mt-3 pt-3 border-t border-emerald-950/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] font-mono uppercase tracking-wider text-slate-400">Brightness</span>
+                    <Lightbulb className="w-3.5 h-3.5 text-amber-300" />
+                  </div>
+                  <div className="relative h-8 flex items-center">
+                    <div className="absolute inset-x-0 h-2 rounded-full bg-slate-800 border border-slate-700 overflow-hidden pointer-events-none">
+                      <div id="eaar-brightness-fill" className="h-full w-[78%] bg-gradient-to-r from-amber-500/30 via-amber-300/70 to-white shadow-[0_0_10px_rgba(251,191,36,0.45)]" />
+                    </div>
+                    <input
+                      aria-label="Rover LED brightness"
+                      type="range"
+                      min="0"
+                      max="255"
+                      defaultValue="200"
+                      onChange={(e) => {
+                        const level = Number(e.target.value);
+                        const fill = document.getElementById("eaar-brightness-fill");
+                        if (fill) fill.style.width = ((level / 255) * 100) + "%";
+                        window.dispatchEvent(new CustomEvent("eaar-lighting-brightness", { detail: { level } }));
+                      }}
+                      className="relative z-10 w-full h-8 appearance-none bg-transparent cursor-pointer accent-amber-300"
+                    />
+                  </div>
+                  <div className="flex justify-between text-[8px] text-slate-600 font-mono">
+                    <span>DIM</span><span>BRIGHT</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Backend & Tools Quick Action */}
+            {/* Backend & Tools Quick Action */
             <div className="pt-2 border-t border-emerald-950 space-y-2">
               <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block">
                 Backend & Field Operations
