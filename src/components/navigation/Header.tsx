@@ -163,7 +163,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
         </div>
 
         {/* Zone 2: Navigation Links (Clean text links with hover state) */}
-        <nav className={`hidden md:flex items-center gap-1 lg:gap-2 transition-all duration-200 ${isSearchOpen ? 'scale-x-[0.94] origin-right -translate-x-1' : ''}`}>
+        <nav className="hidden md:flex items-center gap-1 lg:gap-2">
           {navItems.map((item) => {
             const isActive = activeSection === item.id;
             return (
@@ -198,28 +198,30 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
           </button>
 
           {isSearchOpen && (
-            <div className="absolute top-1/2 right-0 -translate-y-1/2 flex items-center z-[60] w-[min(40vw,150px)] rounded-lg bg-[#09150d] border border-emerald-500/70 shadow-2xl shadow-black/40 animate-in slide-in-from-right-3 duration-200">
-              <Search className="w-4 h-4 ml-3 text-emerald-400 shrink-0" />
-              <input
-                autoFocus
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Search website..."
-                aria-label="Search EAAR site"
-                className="w-full bg-transparent px-2 py-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => { setSearchQuery(''); setIsSearchOpen(false); }}
-                className="mr-2 p-1 text-slate-500 hover:text-white"
-                aria-label="Close search"
-              >
-                <X className="w-4 h-4" />
-              </button>
+            <div className="absolute top-full right-0 mt-3 z-[60] w-[min(90vw,360px)]">
+              <div className="flex items-center rounded-lg bg-[#09150d] border border-emerald-500/70 shadow-2xl shadow-black/40">
+                <Search className="w-4 h-4 ml-3 text-emerald-400 shrink-0" />
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search website..."
+                  aria-label="Search EAAR site"
+                  className="w-full bg-transparent px-2 py-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(''); setIsSearchOpen(false); }}
+                  className="mr-2 p-1 text-slate-500 hover:text-white"
+                  aria-label="Close search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
               {searchQuery.trim() && (
-                <div className="absolute top-full right-0 mt-2 w-full rounded-xl bg-[#07120a] border border-emerald-900/70 shadow-2xl overflow-hidden">
+                <div className="mt-2 w-full rounded-xl bg-[#07120a] border border-emerald-900/70 shadow-2xl overflow-hidden">
                   <button
                     type="button"
                     onClick={() => goToSearchResult(searchQuery)}
