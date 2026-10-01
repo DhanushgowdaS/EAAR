@@ -337,7 +337,7 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
               </div>
             </div>
 
-            {/* Backend & Tools Quick Action */
+            {/* Backend & Tools Quick Action */}
             <div className="pt-2 border-t border-emerald-950 space-y-2">
               <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block">
                 Backend & Field Operations
