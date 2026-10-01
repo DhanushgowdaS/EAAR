@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Radio,
   FileCode,
+  Gamepad2,
 } from 'lucide-react';
 
 interface RightDrawerProps {
@@ -54,6 +55,7 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
     { id: 'results', labelKey: 'nav_results', icon: Activity },
     { id: 'devices', labelKey: 'nav_devices', icon: Cpu },
     { id: 'live-status', labelKey: 'nav_live_status', icon: Navigation },
+    { id: 'navigation-controller', labelKey: 'nav_navigation_controller', icon: Gamepad2 },
   ];
 
   const handleNavClick = (id: string) => {
