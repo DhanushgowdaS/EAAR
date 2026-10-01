@@ -1,14 +1,12 @@
 #include <WiFi.h>
 #include <WebServer.h>
-#include <esp_now.h>
-#include <esp_wifi.h>
 #include <DHT.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
 // =====================================================
 // EAAR ESP32-S3 ENVIRONMENT + WI-FI GATEWAY
-// Website -> HTTP -> ESP32-S3 -> ESP-NOW -> ESP32 DevKit
+// Website -> HTTP -> ESP32-S3 -> UART -> HC-05 -> Bluetooth -> ESP32 DevKit
 // =====================================================
 
 // ---------- Wi-Fi ----------
@@ -40,10 +38,15 @@ DHT dht2(DHT2_PIN, DHT_TYPE);
 
 LiquidCrystal_I2C lcd(LCD_ADDRESS, 20, 4);
 
-// ---------- ESP-NOW ----------
-const uint8_t DEVKIT_MAC[6] = {
-  0x6C, 0xC8, 0x40, 0x56, 0xC6, 0x78
-};
+// ---------- HC-05 UART ----------
+// S3 UART1: RX=GPIO16, TX=GPIO17
+// HC-05 TX -> S3 GPIO16 (RX)
+// HC-05 RX <- S3 GPIO17 (TX)
+#define HC05_RX 16
+#define HC05_TX 17
+#define HC05_BAUD 9600
+
+HardwareSerial HC05(1);
 
 WebServer server(80);
 
@@ -131,38 +134,8 @@ void updateLCD() {
 }
 
 // =====================================================
-// ESP-NOW
+// HC-05 UART GATEWAY
 // =====================================================
-
-bool initEspNow() {
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("[ESP-NOW] INIT FAILED");
-    return false;
-  }
-
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(peerInfo.peer_addr, DEVKIT_MAC, 6);
-
-  // 0 means use the current Wi-Fi channel.
-  // This is important because the S3 is also connected to Wi-Fi.
-  peerInfo.channel = 0;
-  peerInfo.ifidx = WIFI_IF_STA;
-  peerInfo.encrypt = false;
-
-  if (esp_now_is_peer_exist(DEVKIT_MAC)) {
-    esp_now_del_peer(DEVKIT_MAC);
-  }
-
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("[ESP-NOW] PEER ADD FAILED");
-    return false;
-  }
-
-  Serial.print("[ESP-NOW] READY, Wi-Fi channel: ");
-  Serial.println(WiFi.channel());
-
-  return true;
-}
 
 bool sendDevKitCommand(char command) {
   if (!(
@@ -179,24 +152,13 @@ bool sendDevKitCommand(char command) {
     return false;
   }
 
-  esp_err_t result = esp_now_send(
-    DEVKIT_MAC,
-    (uint8_t *)&command,
-    1
-  );
+  HC05.write((uint8_t)command);
+  HC05.flush();
 
-  Serial.print("[S3 -> DEVKIT] ");
-  Serial.print(command);
-  Serial.print(" | ");
+  Serial.print("[S3 -> HC-05 -> DEVKIT] ");
+  Serial.println(command);
 
-  if (result == ESP_OK) {
-    Serial.println("ESP-NOW QUEUED");
-    return true;
-  }
-
-  Serial.print("ESP-NOW ERROR: ");
-  Serial.println(result);
-  return false;
+  return true;
 }
 
 // =====================================================
@@ -235,7 +197,7 @@ void handleStatus() {
   json += "\"channel\":";
   json += String(WiFi.channel());
   json += ",";
-  json += "\"devkit\":\"ESP-NOW\",";
+  json += "\"devkit\":\"HC-05 Bluetooth\",";
   json += "\"uptime\":";
   json += String(millis());
   json += "}";
@@ -409,11 +371,11 @@ void setup() {
     lcd.print("WiFi FAILED");
   }
 
-  bool espNowOK = initEspNow();
+  HC05.begin(HC05_BAUD, SERIAL_8N1, HC05_RX, HC05_TX);
 
-  if (espNowOK) {
-    Serial.println("[ESP-NOW] S3 -> DevKit READY");
-  }
+  Serial.println("HC-05 UART: READY");
+  Serial.println("HC-05 RX <- GPIO17");
+  Serial.println("HC-05 TX -> GPIO16");
 
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/environment", HTTP_GET, handleEnvironment);
@@ -429,6 +391,7 @@ void setup() {
   Serial.println("GET /status");
   Serial.println("GET /environment");
   Serial.println("GET /command?cmd=F&key=...");
+  Serial.println("Website -> S3 -> HC-05 -> DevKit");
   Serial.println("================================");
 
   readSensors();
