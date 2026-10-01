@@ -338,6 +338,53 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, [connectionMode]);
 
+  // Realtime fallback polling: keeps the dashboard live even if a Postgres Realtime event is missed.
+  useEffect(() => {
+    if (connectionMode !== 'supabase' || !supabase) return;
+
+    let isMounted = true;
+
+    const refreshLiveData = async () => {
+      const client = supabase;
+      if (!client) return;
+
+      const [envResult, robotResult] = await Promise.all([
+        client
+          .from('environment_readings')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1),
+        client
+          .from('robot_status')
+          .select('*')
+          .order('timestamp', { ascending: false })
+          .limit(1),
+      ]);
+
+      if (!isMounted) return;
+
+      if (!envResult.error && envResult.data && envResult.data.length > 0) {
+        const reading = mapEnvironmentReading(envResult.data[0]);
+        setEnvironment(reading);
+        setLastPacketTimestamp(reading.timestamp);
+      }
+
+      if (!robotResult.error && robotResult.data && robotResult.data.length > 0) {
+        const status = robotResult.data[0] as RobotStatus;
+        setRobotStatus(status);
+        setLastPacketTimestamp(status.timestamp || new Date().toISOString());
+      }
+    };
+
+    refreshLiveData();
+    const timer = setInterval(refreshLiveData, 2000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [connectionMode]);
+
   // Heartbeat checker for device online/offline transitions
   useEffect(() => {
     const timer = setInterval(() => {
