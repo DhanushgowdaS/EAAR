@@ -162,6 +162,7 @@ export const NavigationControllerSection: React.FC = () => {
   const [esp32Status, setEsp32Status] = useState<'not-configured' | 'online' | 'offline'>('not-configured');
   const [esp32Message, setEsp32Message] = useState(DEVKIT_SETUP_MESSAGE);
   const commandHeartbeatRef = useRef<number | null>(null);
+  const stopBurstTimersRef = useRef<number[]>([]);
   const heldNavigationKeysRef = useRef<Set<string>>(new Set());
   const dragRef = useRef<{ key: LayoutKey; dx: number; dy: number } | null>(null);
 
@@ -190,6 +191,8 @@ export const NavigationControllerSection: React.FC = () => {
     return () => {
       if (commandHeartbeatRef.current) window.clearInterval(commandHeartbeatRef.current);
       commandHeartbeatRef.current = null;
+      stopBurstTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      stopBurstTimersRef.current = [];
     };
   }, []);
 
@@ -239,9 +242,24 @@ export const NavigationControllerSection: React.FC = () => {
   const stop = () => {
     if (commandHeartbeatRef.current) window.clearInterval(commandHeartbeatRef.current);
     commandHeartbeatRef.current = null;
+
+    // Cancel any previously scheduled stop packets before starting a new one.
+    stopBurstTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    stopBurstTimersRef.current = [];
+
     setActiveCommand('S');
     emitCommand('S');
+
+    // A long hold can leave older F/B/L/R HTTP requests in flight.
+    // Send S more than once so any stale movement packet is immediately
+    // overridden by a final stop packet.
     void sendToEsp32('S');
+    [60, 140, 240].forEach((delay) => {
+      const timer = window.setTimeout(() => {
+        void sendToEsp32('S');
+      }, delay);
+      stopBurstTimersRef.current.push(timer);
+    });
   };
 
   const sendCommand = (command: NavigationCommand) => {
