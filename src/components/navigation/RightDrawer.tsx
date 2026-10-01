@@ -33,7 +33,7 @@ const DEVKIT_DEFAULT = 'http://eaar-devkit.local';
 const DEVKIT_API_KEY = 'eaar-navigation-esp32-api-key-v1';
 
 const sendLightingDirect = async (command: string) => {
-  const baseUrl = (localStorage.getItem(ESP32_URL_KEY) || DEVKIT_DEFAULT).trim().replace(/\\/+$/, '');
+  const baseUrl = (localStorage.getItem(ESP32_URL_KEY) || DEVKIT_DEFAULT).trim().replace(/\/+$/, '');
   const key = (localStorage.getItem(ESP32_API_KEY_KEY) || DEVKIT_API_KEY).trim();
   if (!baseUrl || !key) return false;
   try {
@@ -48,7 +48,7 @@ const sendLightingDirect = async (command: string) => {
 };
 
 const sendBrightnessDirect = async (level: number) => {
-  const baseUrl = (localStorage.getItem(ESP32_URL_KEY) || DEVKIT_DEFAULT).trim().replace(/\\/+$/, '');
+  const baseUrl = (localStorage.getItem(ESP32_URL_KEY) || DEVKIT_DEFAULT).trim().replace(/\/+$/, '');
   const key = (localStorage.getItem(ESP32_API_KEY_KEY) || DEVKIT_API_KEY).trim();
   if (!baseUrl || !key) return false;
   try {
