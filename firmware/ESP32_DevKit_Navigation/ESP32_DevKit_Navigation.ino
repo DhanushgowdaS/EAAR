@@ -993,7 +993,7 @@ void applyDrive() {
     else if (corr == 'R') {
 
       rightSpeed =
-        SPEED - CORR_AMOUNT;
+        max(0, (int)forwardBackwardSpeed - CORR_AMOUNT);
     }
   }
 
