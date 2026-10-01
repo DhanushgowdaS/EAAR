@@ -11,8 +11,8 @@
 #define IN3 33
 #define IN4 22
 
-#define SPEED 225
-#define TURN_SPEED 255
+#define DEFAULT_SPEED 225
+#define DEFAULT_TURN_SPEED 255
 #define CORR_AMOUNT 40
 #define MAX_RECORDS 100
 
@@ -96,6 +96,9 @@ bool isNavigationCommand(char command) {
          command == 'D';
 }
 
+uint8_t forwardBackwardSpeed = DEFAULT_SPEED;
+uint8_t leftRightSpeed = DEFAULT_TURN_SPEED;
+
 bool isLightingCommand(char command) {
   return command == '1' || command == '2' ||
          command == '3' || command == '4' ||
@@ -144,6 +147,51 @@ void handleLightingCommand(char command) {
   }
 }
 
+void handleSpeed() {
+  sendCorsHeaders();
+  String key = server.hasArg("key") ? server.arg("key") : "";
+  if (key != API_KEY) {
+    server.send(401, "application/json", "{\"ok\":false,\"error\":\"unauthorized\"}");
+    return;
+  }
+  if (!server.hasArg("fb") && !server.hasArg("lr")) {
+    String response = "{\"ok\":true,\"forwardBackward\":";
+    response += forwardBackwardSpeed;
+    response += ",\"leftRight\":";
+    response += leftRightSpeed;
+    response += "}";
+    server.send(200, "application/json", response);
+    return;
+  }
+  if (server.hasArg("fb")) {
+    int value = server.arg("fb").toInt();
+    if (value < 0 || value > 255) {
+      server.send(400, "application/json", "{\"ok\":false,\"error\":\"fb speed must be 0-255\"}");
+      return;
+    }
+    forwardBackwardSpeed = (uint8_t)value;
+    prefs.putUChar("fbSpeed", forwardBackwardSpeed);
+  }
+  if (server.hasArg("lr")) {
+    int value = server.arg("lr").toInt();
+    if (value < 0 || value > 255) {
+      server.send(400, "application/json", "{\"ok\":false,\"error\":\"lr speed must be 0-255\"}");
+      return;
+    }
+    leftRightSpeed = (uint8_t)value;
+    prefs.putUChar("lrSpeed", leftRightSpeed);
+  }
+  Serial.print("SPEED SETTINGS: F/B=");
+  Serial.print(forwardBackwardSpeed);
+  Serial.print(" L/R=");
+  Serial.println(leftRightSpeed);
+  String response = "{\"ok\":true,\"forwardBackward\":";
+  response += forwardBackwardSpeed;
+  response += ",\"leftRight\":";
+  response += leftRightSpeed;
+  response += "}";
+  server.send(200, "application/json", response);
+}
 void sendCorsHeaders() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.sendHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -162,7 +210,7 @@ void handleCommand() {
     return;
   }
 
-  if (cmd.length() != 1 || !isNavigationCommand(cmd[0])) {
+  if (cmd.length() != 1 || (!isNavigationCommand(cmd[0]) && !isLightingCommand(cmd[0]) && cmd[0] != 'x')) {
     server.send(400, "application/json",
                 "{\"ok\":false,\"error\":\"invalid command\"}");
     return;
@@ -180,7 +228,7 @@ void handleCommand() {
     Serial.println("================================");
     handleLightingCommand(command);
     server.send(200, "application/json",
-                "{"ok":true,"command":"" + String(command) + "","type":"lighting","device":"EAAR-ESP32-DEVKIT"}");
+                "{\"ok\":true,\"command\":\"" + String(command) + "\",\"type\":\"lighting\",\"device\":\"EAAR-ESP32-DEVKIT\"}");
     return;
   }
 
@@ -271,7 +319,9 @@ void startWiFiServer() {
   server.on("/command", HTTP_GET, handleCommand);
   server.on("/command", HTTP_OPTIONS, handleOptions);
   server.on("/status", HTTP_GET, handleStatus);
+  server.on("/speed", HTTP_GET, handleSpeed);
   server.on("/status", HTTP_OPTIONS, handleOptions);
+  server.on("/speed", HTTP_OPTIONS, handleOptions);
 
   server.on("/", HTTP_GET, []() {
     sendCorsHeaders();
@@ -332,6 +382,8 @@ void setup() {
   strip.show();
 
   prefs.begin("agribot", false);
+  forwardBackwardSpeed = prefs.getUChar("fbSpeed", DEFAULT_SPEED);
+  leftRightSpeed = prefs.getUChar("lrSpeed", DEFAULT_TURN_SPEED);
 
   // Route data remains stored in Preferences across restarts.
 
@@ -349,6 +401,10 @@ void setup() {
   Serial.println("M = Save Route");
   Serial.println("A = Automatic Mode");
   Serial.println("D = Delete Flash");
+  Serial.print("SPEED: F/B=");
+  Serial.print(forwardBackwardSpeed);
+  Serial.print(" L/R=");
+  Serial.println(leftRightSpeed);
   Serial.println("LIGHTING: 1 Red | 2 Green | 3 Blue | 4 Yellow | 5 Warm");
   Serial.println("LIGHTING: 6 Maroon | 7 Peacock | 8 Off");
   Serial.println("LIGHTING: 9 Snake | 0 Fade | X DJ");
@@ -908,12 +964,12 @@ void applyDrive() {
 
   // Forward/backward keeps the existing SPEED value (225).
   // Left/right turns use full PWM speed (255) for quicker turning.
-  int leftSpeed = SPEED;
-  int rightSpeed = SPEED;
+  int leftSpeed = forwardBackwardSpeed;
+  int rightSpeed = forwardBackwardSpeed;
 
   if (currentState == 'L' || currentState == 'R') {
-    leftSpeed = TURN_SPEED;
-    rightSpeed = TURN_SPEED;
+    leftSpeed = leftRightSpeed;
+    rightSpeed = leftRightSpeed;
   }
 
   // During automatic playback or recording, use full configured speed.
@@ -931,7 +987,7 @@ void applyDrive() {
     if (corr == 'L') {
 
       leftSpeed =
-        SPEED - CORR_AMOUNT;
+        max(0, (int)forwardBackwardSpeed - CORR_AMOUNT);
     }
 
     else if (corr == 'R') {
