@@ -17,9 +17,9 @@ type LayoutMap = Record<LayoutKey, LayoutPosition>;
 
 const STORAGE_KEY = 'eaar-navigation-controller-layout-v1';
 const ESP32_URL_KEY = 'eaar-navigation-esp32-url-v1';
-const S3_GATEWAY_DEFAULT = 'http://10.102.214.176';
+const DEVKIT_DEFAULT = 'http://eaar-devkit.local';
 const ESP32_API_KEY = 'eaar-navigation-esp32-api-key-v1';
-const S3_GATEWAY_SETUP_MESSAGE = 'Enter the S3 API key and press SAVE LINK once. Then arrow presses are sent to the gateway.';
+const DEVKIT_SETUP_MESSAGE = 'Enter the DevKit IP (or eaar-devkit.local) and API key, then SAVE LINK once.';
 const ESP32_HEARTBEAT_MS = 300;
 
 const DEFAULT_LAYOUT: LayoutMap = {
@@ -155,10 +155,10 @@ export const NavigationControllerSection: React.FC = () => {
   const [layout, setLayout] = useState<LayoutMap>(DEFAULT_LAYOUT);
   const [draftLayout, setDraftLayout] = useState<LayoutMap>(DEFAULT_LAYOUT);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [esp32Url, setEsp32Url] = useState(S3_GATEWAY_DEFAULT);
+  const [esp32Url, setEsp32Url] = useState(DEVKIT_DEFAULT);
   const [esp32ApiKey, setEsp32ApiKey] = useState('');
   const [esp32Status, setEsp32Status] = useState<'not-configured' | 'online' | 'offline'>('not-configured');
-  const [esp32Message, setEsp32Message] = useState(S3_GATEWAY_SETUP_MESSAGE);
+  const [esp32Message, setEsp32Message] = useState(DEVKIT_SETUP_MESSAGE);
   const commandHeartbeatRef = useRef<number | null>(null);
   const dragRef = useRef<{ key: LayoutKey; dx: number; dy: number } | null>(null);
 
@@ -166,7 +166,7 @@ export const NavigationControllerSection: React.FC = () => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setLayout({ ...DEFAULT_LAYOUT, ...JSON.parse(saved) });
-      setEsp32Url(localStorage.getItem(ESP32_URL_KEY) || S3_GATEWAY_DEFAULT);
+      setEsp32Url(localStorage.getItem(ESP32_URL_KEY) || DEVKIT_DEFAULT);
       setEsp32ApiKey(localStorage.getItem(ESP32_API_KEY) || '');
     } catch {}
     emitCommand('S');
@@ -185,7 +185,7 @@ export const NavigationControllerSection: React.FC = () => {
     const key = esp32ApiKey.trim();
     if (!baseUrl || !key) {
       setEsp32Status('not-configured');
-      setEsp32Message(S3_GATEWAY_SETUP_MESSAGE);
+      setEsp32Message(DEVKIT_SETUP_MESSAGE);
       return false;
     }
 
@@ -200,11 +200,11 @@ export const NavigationControllerSection: React.FC = () => {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setEsp32Status('online');
-      setEsp32Message(`ESP32-S3 received ${command}`);
+      setEsp32Message(`ESP32 DevKit received ${command}`);
       return true;
     } catch {
       setEsp32Status('offline');
-      setEsp32Message('S3 unreachable or browser local-network permission not granted');
+      setEsp32Message('DevKit unreachable or browser local-network permission not granted');
       return false;
     } finally {
       window.clearTimeout(timeout);
@@ -357,20 +357,20 @@ export const NavigationControllerSection: React.FC = () => {
           <div className="flex flex-col lg:flex-row lg:items-end gap-3">
             <div className="flex-1">
               <div className="flex items-center gap-2 text-[10px] font-mono tracking-widest text-cyan-300 uppercase mb-2">
-                <Wifi className="w-3.5 h-3.5" /> ESP32-S3 GATEWAY LINK
+                <Wifi className="w-3.5 h-3.5" /> ESP32 DEVKIT WIFI LINK
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input
                   value={esp32Url}
                   onChange={(event) => setEsp32Url(event.target.value)}
-                  placeholder="http://10.102.214.176"
-                  aria-label="ESP32-S3 gateway address"
+                  placeholder="http://eaar-devkit.local or http://DEVKIT-IP"
+                  aria-label="ESP32 DevKit address"
                   className="w-full rounded-xl border border-slate-700 bg-black/40 px-3 py-2 text-xs font-mono text-slate-200 outline-none focus:border-cyan-400"
                 />
                 <input
                   value={esp32ApiKey}
                   onChange={(event) => setEsp32ApiKey(event.target.value)}
-                  placeholder="EAAR-ESP32-S3 API key"
+                  placeholder="EAAR DevKit API key"
                   type="password"
                   aria-label="ESP32 API key"
                   className="w-full rounded-xl border border-slate-700 bg-black/40 px-3 py-2 text-xs font-mono text-slate-200 outline-none focus:border-cyan-400"
