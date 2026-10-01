@@ -362,7 +362,7 @@ export const NavigationControllerSection: React.FC = () => {
     const handleLightingCommand = (event: Event) => {
       const command = (event as CustomEvent<{ command?: LightingCommand }>).detail?.command;
       if (!command) return;
-      void sendToEsp32(command);
+      void sendLighting(command);
     };
     const handleBrightness = (event: Event) => {
       const level = (event as CustomEvent<{ level?: number }>).detail?.level;
@@ -486,8 +486,40 @@ export const NavigationControllerSection: React.FC = () => {
 
   const testEsp32Connection = () => { void sendToEsp32('S'); };
 
-  const sendLighting = (command: LightingCommand) => {
-    void sendToEsp32(command);
+  const sendLighting = async (command: LightingCommand) => {
+    const baseUrl = normalizedEsp32Url();
+    const key = esp32ApiKey.trim();
+    if (!baseUrl || !key) {
+      setEsp32Status('not-configured');
+      setEsp32Message(DEVKIT_SETUP_MESSAGE);
+      return false;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 900);
+
+    try {
+      const url = baseUrl + '/lighting?cmd=' + encodeURIComponent(command) + '&key=' + encodeURIComponent(key);
+      const response = await fetch(url, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-store',
+        keepalive: true,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+
+      setEsp32Status('online');
+      setEsp32Message('ESP32 DevKit lighting received ' + command);
+      return true;
+    } catch {
+      setEsp32Status('offline');
+      setEsp32Message('DevKit unreachable or browser local-network permission not granted');
+      return false;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   };
 
   const openSettings = () => { setDraftLayout(layout); setSettingsOpen(true); };
