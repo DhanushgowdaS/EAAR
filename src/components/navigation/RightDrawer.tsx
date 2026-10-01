@@ -18,6 +18,15 @@ import {
   Radio,
   FileCode,
   Gamepad2,
+  Lightbulb,
+  AlertTriangle,
+  Leaf,
+  Activity,
+  Radio,
+  Moon,
+  Sun,
+  Sparkles,
+  Power,
 } from 'lucide-react';
 
 interface RightDrawerProps {
@@ -254,6 +263,51 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                   <span className="text-[11px] text-slate-500 font-mono">checkpoints</span>
                 </div>
                 <p className="text-[10px] text-slate-500 font-mono">Rows and checkpoints are saved locally for this field.</p>
+              </div>
+            </div>
+
+            {/* Rover Lighting */}
+            <div className="pt-2 border-t border-emerald-950 space-y-2">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="w-4 h-4 text-amber-400" />
+                <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                  Rover Lighting
+                </span>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#09170e] border border-emerald-900/50">
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { command: '1', label: 'ALERT', detail: 'RED', icon: AlertTriangle, cls: 'text-rose-300 border-rose-500/40 bg-rose-500/10' },
+                    { command: '2', label: 'READY', detail: 'GREEN', icon: Leaf, cls: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10' },
+                    { command: '3', label: 'ACTIVE', detail: 'BLUE', icon: Activity, cls: 'text-blue-300 border-blue-500/40 bg-blue-500/10' },
+                    { command: '4', label: 'TRAINING', detail: 'YELLOW', icon: Radio, cls: 'text-yellow-300 border-yellow-500/40 bg-yellow-500/10' },
+                    { command: '5', label: 'NIGHT', detail: 'WARM', icon: Moon, cls: 'text-orange-300 border-orange-500/40 bg-orange-500/10' },
+                    { command: '6', label: 'HARVEST', detail: 'MAROON', icon: Sun, cls: 'text-red-300 border-red-900/60 bg-red-950/20' },
+                    { command: '7', label: 'SCAN', detail: 'PEACOCK', icon: Sparkles, cls: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10' },
+                    { command: '8', label: 'LIGHTS OFF', detail: '', icon: Power, cls: 'text-slate-200 border-slate-600 bg-slate-900/50' },
+                    { command: '9', label: 'SNAKE', detail: 'EFFECT', icon: Sparkles, cls: 'text-purple-300 border-purple-500/40 bg-purple-500/10' },
+                    { command: '0', label: 'FADE', detail: 'COLOR CYCLE', icon: Sparkles, cls: 'text-indigo-300 border-indigo-500/40 bg-indigo-500/10' },
+                    { command: 'X', label: 'DJ', detail: 'RAINBOW', icon: Sparkles, cls: 'text-fuchsia-300 border-fuchsia-500/40 bg-fuchsia-500/10' },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.command}
+                        type="button"
+                        onClick={() => window.dispatchEvent(new CustomEvent('eaar-lighting-command', { detail: { command: item.command } }))}
+                        className={`rounded-lg border px-2.5 py-2.5 text-left transition-all hover:brightness-125 ${item.cls}`}
+                      >
+                        <Icon className="w-4 h-4 mb-1" />
+                        <div className="text-[10px] font-mono font-semibold">{item.label}</div>
+                        {item.detail && <div className="text-[8px] font-mono opacity-60">{item.detail}</div>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[9px] text-slate-500 font-mono">
+                  Sends the selected lighting command to the ESP32 DevKit.
+                </p>
               </div>
             </div>
 
