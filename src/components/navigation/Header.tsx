@@ -186,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
         </nav>
 
         {/* Slide-out Site Search */}
-        <div className="relative flex items-center shrink-0">
+        <div className="relative flex items-center shrink-0 order-1 lg:order-0">
           <button
             type="button"
             onClick={() => setIsSearchOpen((open) => !open)}
