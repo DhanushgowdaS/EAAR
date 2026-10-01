@@ -273,6 +273,17 @@ export const NavigationControllerSection: React.FC = () => {
   };
 
   useEffect(() => {
+    const handleLightingCommand = (event: Event) => {
+      const command = (event as CustomEvent<{ command?: LightingCommand }>).detail?.command;
+      if (!command) return;
+      void sendToEsp32(command);
+    };
+
+    window.addEventListener('eaar-lighting-command', handleLightingCommand);
+    return () => window.removeEventListener('eaar-lighting-command', handleLightingCommand);
+  }, [esp32Url, esp32ApiKey]);
+
+  useEffect(() => {
     const keyToCommand: Record<string, NavigationCommand> = {
       ArrowUp: 'F',
       ArrowDown: 'B',
