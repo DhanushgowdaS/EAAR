@@ -72,6 +72,84 @@ uint16_t djHue = 0;
 unsigned long lastDjStep = 0;
 
 // =====================================================
+// CLASSIC BLUETOOTH LINK
+// =====================================================
+
+// The original ESP32 DevKit has Bluetooth Classic SPP.
+// It acts as the Bluetooth master and connects to the HC-05
+// attached to the ESP32-S3.
+BluetoothSerial SerialBT;
+const char *HC05_BT_NAME = "HC-05";
+unsigned long lastBtConnectAttempt = 0;
+const unsigned long BT_RECONNECT_MS = 15000;
+
+bool isNavigationCommand(char command) {
+  return command == 'F' || command == 'B' ||
+         command == 'L' || command == 'R' ||
+         command == 'S' || command == 'T' ||
+         command == 'M' || command == 'A' ||
+         command == 'D';
+}
+
+void startBluetoothLink() {
+  Serial.println();
+  Serial.println("================================");
+  Serial.println(" CLASSIC BLUETOOTH LINK");
+  Serial.println("================================");
+
+  if (!SerialBT.begin("EAAR-DEVKIT", true)) {
+    Serial.println("BLUETOOTH INIT: FAILED");
+    return;
+  }
+
+  Serial.println("BLUETOOTH INIT: OK");
+  Serial.print("TARGET: ");
+  Serial.println(HC05_BT_NAME);
+  Serial.println("CONNECTING TO HC-05...");
+
+  if (SerialBT.connect(HC05_BT_NAME)) {
+    Serial.println("BLUETOOTH: CONNECTED TO HC-05");
+  } else {
+    Serial.println("BLUETOOTH: NOT CONNECTED YET");
+    Serial.println("Will retry automatically.");
+  }
+
+  lastBtConnectAttempt = millis();
+}
+
+void updateBluetoothLink() {
+  if (SerialBT.connected()) {
+    return;
+  }
+
+  if (millis() - lastBtConnectAttempt < BT_RECONNECT_MS) {
+    return;
+  }
+
+  lastBtConnectAttempt = millis();
+
+  Serial.println("[BT] Reconnecting to HC-05...");
+
+  if (SerialBT.connect(HC05_BT_NAME)) {
+    Serial.println("[BT] HC-05 CONNECTED");
+  } else {
+    Serial.println("[BT] HC-05 connection attempt failed");
+  }
+}
+
+void processBluetoothCommand() {
+  while (SerialBT.available()) {
+    char c = (char)SerialBT.read();
+
+    if (isNavigationCommand(c)) {
+      Serial.print("[BT] RECEIVED: ");
+      Serial.println(c);
+      handleMotorCommand(c);
+    }
+  }
+}
+
+// =====================================================
 // SETUP
 // =====================================================
 
@@ -162,42 +240,7 @@ void loop() {
   updateFade();
   updateDJ();
 
-  // =============================================
-  // LEGACY HC-05 UART INPUT (not used in new architecture)
-  // =============================================
-
-  if (false) {
-
-    char c = HC05.read();
-
-    if (c == '\r' || c == '\n') {
-
-      if (bufLen > 0) {
-
-        cmdBuffer[bufLen] = '\0';
-
-        processToken();
-
-        bufLen = 0;
-      }
-    }
-
-    else if (c == ' ') {
-      // ignore
-    }
-
-    else {
-
-      if (bufLen < (int)sizeof(cmdBuffer) - 1) {
-
-        cmdBuffer[bufLen++] = c;
-      }
-
-      lastCharTime = millis();
-    }
-  }
-
-  if (bufLen > 0 &&
+    if (bufLen > 0 &&
       millis() - lastCharTime > GAP_MS) {
 
     cmdBuffer[bufLen] = '\0';
