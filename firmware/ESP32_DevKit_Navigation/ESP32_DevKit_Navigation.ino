@@ -142,11 +142,15 @@ void loadOrCreateApiKey() {
 
 void connectWiFi() {
 
+  // Set the lowest practical Wi-Fi transmit power BEFORE enabling
+  // the Wi-Fi radio. This avoids the initial higher-current radio
+  // startup that is causing the ESP32 brownout.
+  WiFi.setTxPower(WIFI_POWER_2dBm);
+
   WiFi.mode(WIFI_STA);
 
-  // Reduce Wi-Fi transmit power to lower the instantaneous current
-  // demand during startup and normal operation.
-  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  // Keep Wi-Fi power limited during normal operation as well.
+  WiFi.setTxPower(WIFI_POWER_2dBm);
 
   Serial.println("WIFI: RADIO INITIALIZED");
   Serial.println("WIFI: STARTING CONNECTION...");
