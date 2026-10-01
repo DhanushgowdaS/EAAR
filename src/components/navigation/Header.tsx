@@ -39,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
   };
 
   const searchTargets = [
+    { keywords: ['navigation controller', 'remote', 'joystick', 'arrow controller', 'controller'], section: 'live-status', label: 'Navigation Controller — Remote / Joystick / Arrow Controller' },
     { keywords: ['home'], section: 'home', label: 'Home' },
     { keywords: ['about', 'ar', 'computer module', 'supported regions'], section: 'about', label: 'About — AR Computer Module / Supported Regions' },
     { keywords: ['temperature', 'humidity', 'moisture', 'environmental condition'], section: 'results', label: 'Field Inspection — Environmental Conditions' },
@@ -46,7 +47,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
     { keywords: ['device', 'devices', 'hardware', 'esp32', 'esp32 devkit'], section: 'devices', label: 'Devices — ESP32 / Hardware' },
     { keywords: ['navigation', 'autonomous navigation'], section: 'results', label: 'Autonomous Navigation' },
     { keywords: ['ros', 'checkpoints', 'visual navigation progress'], section: 'results', label: 'Visual Navigation Progress — ROS / Checkpoints' },
-    { keywords: ['controller', 'remote', 'joystick'], section: 'live-status', label: 'Navigation Controller — Remote / Joystick' },
   ];
 
   const getSearchMatches = (query: string) => {
@@ -74,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
   const goToSearchResult = (query: string) => {
     const normalized = query.trim().toLowerCase();
     const target = searchTargets.find((item) =>
-      item.keywords.includes(normalized) || item.keywords.some((keyword) => keyword === normalized)
+      item.keywords.some((keyword) => keyword === normalized || keyword.startsWith(normalized))
     );
     if (target) setActiveSection(target.section);
     const match = getSearchMatches(query)[0];
