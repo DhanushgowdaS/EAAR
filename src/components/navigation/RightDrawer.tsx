@@ -27,6 +27,41 @@ import {
   Power,
 } from 'lucide-react';
 
+const ESP32_URL_KEY = 'eaar-navigation-esp32-url-v1';
+const ESP32_API_KEY_KEY = 'eaar-navigation-esp32-api-key-v1';
+const DEVKIT_DEFAULT = 'http://eaar-devkit.local';
+const DEVKIT_API_KEY = 'eaar-navigation-esp32-api-key-v1';
+
+const sendLightingDirect = async (command: string) => {
+  const baseUrl = (localStorage.getItem(ESP32_URL_KEY) || DEVKIT_DEFAULT).trim().replace(/\\/+$/, '');
+  const key = (localStorage.getItem(ESP32_API_KEY_KEY) || DEVKIT_API_KEY).trim();
+  if (!baseUrl || !key) return false;
+  try {
+    const response = await fetch(
+      baseUrl + '/lighting?cmd=' + encodeURIComponent(command) + '&key=' + encodeURIComponent(key),
+      { method: 'GET', mode: 'cors', cache: 'no-store', keepalive: true }
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+const sendBrightnessDirect = async (level: number) => {
+  const baseUrl = (localStorage.getItem(ESP32_URL_KEY) || DEVKIT_DEFAULT).trim().replace(/\\/+$/, '');
+  const key = (localStorage.getItem(ESP32_API_KEY_KEY) || DEVKIT_API_KEY).trim();
+  if (!baseUrl || !key) return false;
+  try {
+    const response = await fetch(
+      baseUrl + '/brightness?level=' + Math.round(level) + '&key=' + encodeURIComponent(key),
+      { method: 'GET', mode: 'cors', cache: 'no-store', keepalive: true }
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
 interface RightDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -293,7 +328,7 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                       <button
                         key={item.command}
                         type="button"
-                        onClick={() => window.dispatchEvent(new CustomEvent('eaar-lighting-command', { detail: { command: item.command } }))}
+                        onClick={() => { void sendLightingDirect(item.command); window.dispatchEvent(new CustomEvent('eaar-lighting-command', { detail: { command: item.command } })); }}
                         className={`rounded-md border px-2 py-2 text-left transition-all hover:brightness-125 ${item.cls}`}
                       >
                         <Icon className="w-3.5 h-3.5 mb-0.5" />
@@ -325,7 +360,7 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                         const level = Number(e.target.value);
                         const fill = document.getElementById("eaar-brightness-fill");
                         if (fill) fill.style.width = ((level / 255) * 100) + "%";
-                        void sendBrightnessDirect(level); window.dispatchEvent(new CustomEvent("eaar-lighting-brightness", { detail: { level } }));
+                        void sendBrightnessDirect(level); void sendBrightnessDirect(level); window.dispatchEvent(new CustomEvent("eaar-lighting-brightness", { detail: { level } }));
                       }}
                       className="relative z-10 w-full h-8 appearance-none bg-transparent cursor-pointer accent-amber-300"
                     />
