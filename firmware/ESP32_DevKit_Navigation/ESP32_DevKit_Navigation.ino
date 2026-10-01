@@ -91,7 +91,7 @@ WebServer server(80);
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
          command == 'L' || command == 'R' ||
-         command == 'S' || command == 'T' ||
+         command == 'S' || command == 'T' || command == 'E' ||
          command == 'M' || command == 'A' ||
          command == 'D';
 }
@@ -278,6 +278,7 @@ void setup() {
   Serial.println("       AGRIBOT ROUTE SYSTEM");
   Serial.println("================================");
   Serial.println("T = Start Recording");
+  Serial.println("E = End Training");
   Serial.println("F = Forward");
   Serial.println("B = Backward");
   Serial.println("L = Left");
@@ -344,7 +345,7 @@ void loop() {
         btCommand == 'l' || btCommand == 'r' ||
         btCommand == 's' || btCommand == 't' ||
         btCommand == 'm' || btCommand == 'a' ||
-        btCommand == 'd') {
+        btCommand == 'd' || btCommand == 'e') {
 
       Serial.println();
       Serial.println("================================");
@@ -781,7 +782,16 @@ void handleMotorCommand(char command) {
   }
 
   // =============================================
-  // SAVE
+  // END TRAINING
+  // =============================================
+
+  else if (command == 'E' || command == 'e') {
+
+    endRecording();
+  }
+
+  // =============================================
+  // SAVE TO FLASH
   // =============================================
 
   else if (command == 'M' || command == 'm') {
@@ -977,25 +987,49 @@ void recordCurrentState() {
 }
 
 // =====================================================
+// END TRAINING
+// =====================================================
+
+void endRecording() {
+
+  if (!recording) {
+    Serial.println("NOT RECORDING");
+    return;
+  }
+
+  // Capture the final movement interval before ending training.
+  recordCurrentState();
+
+  stopMotor();
+  recording = false;
+  currentState = 'S';
+  stateStartTime = millis();
+
+  Serial.println();
+  Serial.println("================================");
+  Serial.println(" TRAINING ENDED");
+  Serial.println(" ROUTE READY TO STORE");
+  Serial.println("================================");
+  Serial.print("TOTAL RECORDS: ");
+  Serial.println(routeCount);
+  printRoute();
+}
+
+// =====================================================
 // SAVE TO FLASH
 // =====================================================
 
 void saveToFlash() {
 
-  if (!recording) {
-
-    Serial.println("NOT RECORDING");
-
+  if (recording) {
+    Serial.println("END TRAINING FIRST");
     return;
   }
 
-  recordCurrentState();
-
-  stopMotor();
-
-  recording = false;
-
-  currentState = 'S';
+  if (routeCount <= 0) {
+    Serial.println("NO RECORDED ROUTE TO STORE");
+    return;
+  }
 
   prefs.putInt("count", routeCount);
 
