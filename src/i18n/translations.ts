@@ -17,6 +17,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     nav_results: 'Results',
     nav_devices: 'Devices',
     nav_live_status: 'Live Status',
+    nav_navigation_controller: 'Navigation Controller',
     hero_title: 'EAAR',
     hero_tagline: 'Edge-AI Enabled Autonomous Agricultural Rover',
     hero_desc: 'EAAR learns a crop row once, then walks it on its own — checking every plant for disease, pests, and fungal stress, and treating only what needs it.',
