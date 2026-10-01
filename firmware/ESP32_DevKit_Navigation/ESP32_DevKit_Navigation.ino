@@ -28,6 +28,7 @@
 // =====================================================
 
 HardwareSerial NanoSerial(1);
+HardwareSerial HC05Serial(2);
 Preferences prefs;
 Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -238,7 +239,12 @@ void setup() {
 
   Serial.begin(115200);
 
+  // Arduino Nano heading correction: RX=27, TX=14
   NanoSerial.begin(9600, SERIAL_8N1, 27, 14);
+
+  // HC-05 Bluetooth fallback: ESP32 RX=16, TX=17, 9600 baud.
+  // Website/Wi-Fi and Bluetooth can both send commands to this DevKit.
+  HC05Serial.begin(9600, SERIAL_8N1, 16, 17);
 
   pinMode(ENA, OUTPUT);
   pinMode(ENB, OUTPUT);
@@ -285,7 +291,11 @@ void setup() {
   Serial.println("================================");
   Serial.println("WIFI READY");
   Serial.println("Website -> Wi-Fi -> DevKit");
+  Serial.println("BLUETOOTH READY");
+  Serial.println("HC-05 -> UART2 RX16/TX17 -> DevKit");
+  Serial.println("Website and Bluetooth commands can both control the rover.");
   Serial.println("Website commands will be printed above when received.");
+  Serial.println("Bluetooth commands will be printed above when received.");
 }
 
 // =====================================================
@@ -315,6 +325,38 @@ void loop() {
   }
 
   server.handleClient();
+
+  // =============================================
+  // HC-05 BLUETOOTH FALLBACK
+  // =============================================
+  // Commands from the Bluetooth app are processed immediately,
+  // using the same F/B/L/R/S navigation commands as the website.
+  while (HC05Serial.available()) {
+    char btCommand = HC05Serial.read();
+
+    // Ignore line endings/spaces commonly added by Bluetooth apps.
+    if (btCommand == '\\r' || btCommand == '\\n' || btCommand == ' ') {
+      continue;
+    }
+
+    if (isNavigationCommand(btCommand) ||
+        btCommand == 'f' || btCommand == 'b' ||
+        btCommand == 'l' || btCommand == 'r' ||
+        btCommand == 's' || btCommand == 't' ||
+        btCommand == 'm' || btCommand == 'a' ||
+        btCommand == 'd') {
+
+      Serial.println();
+      Serial.println("================================");
+      Serial.println(" BLUETOOTH COMMAND RECEIVED");
+      Serial.print("COMMAND: ");
+      Serial.println(btCommand);
+      Serial.println("SOURCE: HC-05 -> ESP32 DEVKIT");
+      Serial.println("================================");
+
+      handleMotorCommand(btCommand);
+    }
+  }
 
   applyDrive();
   updateSnake();
