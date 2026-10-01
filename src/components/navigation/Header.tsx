@@ -76,13 +76,43 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
     const target = searchTargets.find((item) =>
       item.keywords.some((keyword) => keyword === normalized || keyword.startsWith(normalized))
     );
-    if (target) setActiveSection(target.section);
-    const match = getSearchMatches(query)[0];
-    if (match?.element) {
-      setTimeout(() => match.element.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-    }
+    if (!target) return;
+
+    setActiveSection(target.section);
     setSearchQuery('');
     setIsSearchOpen(false);
+
+    const keyword = target.keywords.find((item) =>
+      item === normalized || item.startsWith(normalized)
+    ) || target.keywords[0];
+
+    let attempts = 0;
+    const scrollToMatch = () => {
+      const main = document.querySelector('main');
+      if (!main) return;
+      const section = Array.from(main.querySelectorAll('section')).find((element) =>
+        element.id === target.section || element.dataset.section === target.section
+      ) as HTMLElement | undefined;
+
+      if (!section) {
+        if (attempts++ < 20) window.setTimeout(scrollToMatch, 50);
+        return;
+      }
+
+      if (target.section === 'home' && keyword === 'home') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      const needle = keyword.toLowerCase();
+      const matches = Array.from(section.querySelectorAll('h1,h2,h3,h4,p,span,li,button')).filter((element) =>
+        (element.textContent || '').toLowerCase().includes(needle)
+      ) as HTMLElement[];
+
+      (matches[0] || section).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+
+    window.setTimeout(scrollToMatch, 50);
   };
 
   const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
