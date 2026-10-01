@@ -18,13 +18,31 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
   } = useRover();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  const levenshtein = (a: string, b: string) => {
+    const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      let prevDiagonal = prev[0];
+      prev[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const temp = prev[j];
+        prev[j] = Math.min(
+          prev[j] + 1,
+          prev[j - 1] + 1,
+          prevDiagonal + (a[i - 1] === b[j - 1] ? 0 : 1)
+        );
+        prevDiagonal = temp;
+      }
+    }
+    return prev[b.length];
+  };
 
   const getSearchMatches = (query: string) => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return [];
 
-    const tokens = normalized.split(/\\s+/).filter(Boolean);
+    const tokens = normalized.split(/\s+/).filter(Boolean);
     const sections = Array.from(document.querySelectorAll('main section')) as HTMLElement[];
     const matches: Array<{ element: HTMLElement; score: number; label: string }> = [];
 
@@ -36,22 +54,43 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
       candidates.forEach((element) => {
         if (element.closest('header')) return;
 
-        const text = (element.innerText || '').replace(/\\s+/g, ' ').trim();
+        const text = (element.innerText || '').replace(/\s+/g, ' ').trim();
         const lower = text.toLowerCase();
         if (!text || text.length > 900) return;
 
         const phrase = lower.includes(normalized);
         const tokenHits = tokens.filter((token) => lower.includes(token)).length;
-        if (!phrase && tokenHits === 0) return;
+
+        // Fuzzy-match individual words so small spelling mistakes still
+        // produce useful predictions and navigation targets.
+        const words = Array.from(new Set(
+          lower.match(/[a-z0-9][a-z0-9-]*/g) || []
+        ));
+        let fuzzyHits = 0;
+        let closestDistance = Infinity;
+
+        tokens.forEach((token) => {
+          if (lower.includes(token)) {
+            fuzzyHits++;
+            closestDistance = 0;
+            return;
+          }
+          const distance = words.reduce((best, word) => Math.min(best, levenshtein(token, word)), Infinity);
+          const allowed = token.length <= 3 ? 1 : token.length <= 6 ? 2 : 3;
+          if (distance <= allowed) {
+            fuzzyHits++;
+            closestDistance = Math.min(closestDistance, distance);
+          }
+        });
+
+        if (!phrase && tokenHits === 0 && fuzzyHits === 0) return;
 
         const headingBoost = /^H[1-6]$/.test(element.tagName) ? 25 : 0;
         const phraseBoost = phrase ? 100 : 0;
         const tokenScore = tokenHits * 12;
-
-        // Prefer a useful content/card block, but prefer the smallest useful
-        // block when several nested elements contain the same search term.
+        const fuzzyScore = fuzzyHits * 9 - (closestDistance === Infinity ? 0 : closestDistance * 2);
         const compactness = text.length <= 240 ? 18 : text.length <= 500 ? 10 : 3;
-        const score = phraseBoost + tokenScore + headingBoost + compactness;
+        const score = phraseBoost + tokenScore + fuzzyScore + headingBoost + compactness;
 
         matches.push({
           element,
@@ -70,24 +109,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
   };
 
   const goToSearchResult = (query: string) => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return;
-
-    const matches = getSearchMatches(normalized);
+    const matches = getSearchMatches(query);
     const best = matches[0];
-
-    setIsSearchFocused(false);
-    setSearchQuery('');
 
     if (best) {
       best.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
+      setSearchQuery('');
+      setIsSearchOpen(false);
     }
-
-    // Nothing on the current rendered page matched. Do not redirect to an
-    // unrelated section; simply leave the user where they are.
   };
-
 
   const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
@@ -95,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
     }
     if (event.key === 'Escape') {
       setSearchQuery('');
-      setIsSearchFocused(false);
+      setIsSearchOpen(false);
     }
   };
 
@@ -155,64 +185,70 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
           })}
         </nav>
 
-        {/* Site Search */}
-        <div className="relative hidden lg:block w-48 xl:w-64">
-          <div className={`flex items-center gap-2 rounded-lg bg-[#09150d] border transition-colors ${isSearchFocused ? 'border-emerald-500/70' : 'border-emerald-900/60'}`}>
-            <Search className="w-4 h-4 ml-3 text-emerald-400/80 shrink-0" />
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              onFocus={() => setIsSearchFocused(true)}
-              onKeyDown={handleSearchKeyDown}
-              onBlur={() => window.setTimeout(() => setIsSearchFocused(false), 150)}
-              placeholder="Search site..."
-              aria-label="Search EAAR site"
-              className="w-full bg-transparent px-1.5 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => setSearchQuery('')}
-                className="mr-2 text-slate-500 hover:text-white"
-                aria-label="Clear search"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+        {/* Slide-out Site Search */}
+        <div className="relative flex items-center">
+          <button
+            type="button"
+            onClick={() => setIsSearchOpen((open) => !open)}
+            className="p-2 rounded-lg bg-[#09150d] border border-emerald-900/60 text-emerald-300 hover:text-white hover:border-emerald-500 hover:bg-emerald-900/40 transition-colors"
+            aria-label="Open website search"
+            title="Search website"
+          >
+            <Search className="w-5 h-5" />
+          </button>
 
-          {isSearchFocused && searchQuery.trim() && (
-            <div className="absolute top-full right-0 mt-2 w-80 rounded-xl bg-[#07120a] border border-emerald-900/70 shadow-2xl overflow-hidden z-50">
+          {isSearchOpen && (
+            <div className="absolute top-1/2 right-0 -translate-y-1/2 flex items-center z-[60] w-[min(82vw,360px)] rounded-lg bg-[#09150d] border border-emerald-500/70 shadow-2xl shadow-black/40 animate-in slide-in-from-right-3 duration-200">
+              <Search className="w-4 h-4 ml-3 text-emerald-400 shrink-0" />
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search website..."
+                aria-label="Search EAAR site"
+                className="w-full bg-transparent px-2 py-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
+              />
               <button
                 type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => goToSearchResult(searchQuery)}
-                className="w-full text-left px-3 py-3 text-xs font-mono text-emerald-300 hover:bg-emerald-950/60 transition-colors border-b border-emerald-950"
+                onClick={() => { setSearchQuery(''); setIsSearchOpen(false); }}
+                className="mr-2 p-1 text-slate-500 hover:text-white"
+                aria-label="Close search"
               >
-                <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">
-                  Search all website content
-                </span>
-                Press Enter or click to jump to the best match
+                <X className="w-4 h-4" />
               </button>
-              {getSearchMatches(searchQuery).map((match, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => goToSearchResult(match.label)}
-                  className="w-full text-left px-3 py-2.5 text-xs font-mono text-slate-300 hover:bg-emerald-950/60 hover:text-emerald-300 transition-colors"
-                >
-                  {match.label}
-                </button>
-              ))}
-              {getSearchMatches(searchQuery).length === 0 && (
-                <div className="px-3 py-3 text-xs font-mono text-slate-500">
-                  No matching content found on the page.
+
+              {searchQuery.trim() && (
+                <div className="absolute top-full right-0 mt-2 w-full rounded-xl bg-[#07120a] border border-emerald-900/70 shadow-2xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => goToSearchResult(searchQuery)}
+                    className="w-full text-left px-3 py-3 text-xs font-mono text-emerald-300 hover:bg-emerald-950/60 transition-colors border-b border-emerald-950"
+                  >
+                    <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                      Smart website search
+                    </span>
+                    Press Enter or click to jump to the closest match
+                  </button>
+                  {getSearchMatches(searchQuery).map((match, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => goToSearchResult(match.label)}
+                      className="w-full text-left px-3 py-2.5 text-xs font-mono text-slate-300 hover:bg-emerald-950/60 hover:text-emerald-300 transition-colors"
+                    >
+                      {match.label}
+                    </button>
+                  ))}
+                  {getSearchMatches(searchQuery).length === 0 && (
+                    <div className="px-3 py-3 text-xs font-mono text-slate-500">
+                      No close match found.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}}
+          )}
         </div>
 
         {/* Zone 3: Actions & Real-Time Status & Hamburger Menu */}
