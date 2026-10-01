@@ -193,13 +193,11 @@ export const NavigationControllerSection: React.FC = () => {
     const timeout = window.setTimeout(() => controller.abort(), 900);
     try {
       const url = `${baseUrl}/command?cmd=${encodeURIComponent(command)}&key=${encodeURIComponent(key)}`;
-      const request = new Request(url, {
+      const response = await fetch(url, {
         method: 'GET',
         mode: 'cors',
         signal: controller.signal,
-        targetAddressSpace: 'local',
-      } as RequestInit & { targetAddressSpace: 'local' });
-      const response = await fetch(request);
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setEsp32Status('online');
       setEsp32Message(`ESP32-S3 received ${command}`);
