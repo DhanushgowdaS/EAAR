@@ -20,7 +20,7 @@ const ESP32_URL_KEY = 'eaar-navigation-esp32-url-v1';
 const DEVKIT_DEFAULT = 'http://eaar-devkit.local';
 const ESP32_API_KEY = 'eaar-navigation-esp32-api-key-v1';
 const DEVKIT_SETUP_MESSAGE = 'Enter the DevKit IP (or eaar-devkit.local) and API key, then SAVE LINK once.';
-const ESP32_HEARTBEAT_MS = 100;
+const ESP32_HEARTBEAT_MS = 50;
 
 const DEFAULT_LAYOUT: LayoutMap = {
   manual: { x: 12, y: 12, w: 11, h: 8 },
