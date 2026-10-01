@@ -156,9 +156,6 @@ void processEspNowCommand() {
 }
 
 // =====================================================
-// BLUETOOTH
-// =====================================================
-// =====================================================
 // SETUP
 // =====================================================
 
@@ -192,8 +189,7 @@ void setup() {
 
   prefs.begin("agribot", false);
 
-  // API key is stored in the same Preferences namespace as the route.
-  // It is created only once and survives normal ESP32 restarts.
+  // Route data remains stored in Preferences across restarts.
   startEspNow();
 
   Serial.println();
@@ -1089,16 +1085,14 @@ void deleteFlash() {
 
   currentState = 'S';
 
-  // IMPORTANT:
-  // Do not use prefs.clear() here because that would also
-  // erase the persistent API key.
+  // Keep the Preferences namespace intact; remove only route data.
   prefs.remove("count");
   prefs.remove("route");
 
   Serial.println();
   Serial.println("================================");
   Serial.println(" FLASH ROUTE DATA DELETED");
-  Serial.println(" API KEY PRESERVED");
+  Serial.println(" ROUTE STORAGE READY");
   Serial.println("================================");
   Serial.println("READY FOR NEW ROUTE");
 }
