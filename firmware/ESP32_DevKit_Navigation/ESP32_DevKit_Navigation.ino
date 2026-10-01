@@ -1,11 +1,6 @@
-#include <WiFi.h>
-#include <esp_now.h>
-#include <esp_wifi.h>
+#include <BluetoothSerial.h>
 #include <Preferences.h>
 #include <Adafruit_NeoPixel.h>
-
-#define RX_PIN 16
-#define TX_PIN 17
 
 #define ENA 25
 #define ENB 26
@@ -27,22 +22,9 @@
 #define DJ_SPREAD (65536 / NUM_LEDS)
 
 // =====================================================
-// ESP-NOW RECEIVER
-// =====================================================
-
-// The DevKit does NOT connect to Wi-Fi.
-// ESP-NOW only uses the ESP32 radio for the S3 -> DevKit link.
-#define ESPNOW_START_CHANNEL 1
-#define ESPNOW_END_CHANNEL   13
-#define ESPNOW_HOP_MS        250
-
-const uint8_t DEVKIT_MAC[6] = {0x6C, 0xC8, 0x40, 0x56, 0xC6, 0x78};
-
-// =====================================================
 // NAVIGATION / HARDWARE STATE
 // =====================================================
 
-HardwareSerial HC05(2);
 HardwareSerial NanoSerial(1);
 Preferences prefs;
 Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
@@ -90,127 +72,6 @@ uint16_t djHue = 0;
 unsigned long lastDjStep = 0;
 
 // =====================================================
-// ESP-NOW RECEIVER STATE
-// =====================================================
-
-volatile char espNowPendingCommand = 0;
-volatile bool espNowCommandPending = false;
-
-bool espNowChannelLocked = false;
-uint8_t espNowChannel = ESPNOW_START_CHANNEL;
-unsigned long lastEspNowHop = 0;
-
-bool isNavigationCommand(char command) {
-  return command == 'F' || command == 'B' ||
-         command == 'L' || command == 'R' ||
-         command == 'S' || command == 'T' ||
-         command == 'M' || command == 'A' ||
-         command == 'D';
-}
-
-// ESP-NOW receive callback.
-// Keep this callback short; the actual motor command is handled in loop().
-void onEspNowReceive(const esp_now_recv_info_t *info,
-                     const uint8_t *data,
-                     int dataLen) {
-
-  if (data == nullptr || dataLen < 1) {
-    return;
-  }
-
-  char command = (char)data[0];
-
-  if (!isNavigationCommand(command)) {
-    return;
-  }
-
-  espNowPendingCommand = command;
-  espNowCommandPending = true;
-
-  // The first valid packet tells us the correct Wi-Fi/ESP-NOW channel.
-  espNowChannelLocked = true;
-}
-
-void startEspNow() {
-
-  // ESP-NOW requires the Wi-Fi radio, but the DevKit never connects
-  // to an access point. This avoids the old Wi-Fi client connection.
-  setCpuFrequencyMhz(80);
-
-  WiFi.mode(WIFI_STA);
-  WiFi.setTxPower(WIFI_POWER_2dBm);
-
-  delay(100);
-
-  Serial.println();
-  Serial.println("================================");
-  Serial.println(" ESP-NOW RECEIVER");
-  Serial.println("================================");
-
-  Serial.print("DEVKIT MAC: ");
-  Serial.println(WiFi.macAddress());
-
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW INIT: FAILED");
-    return;
-  }
-
-  if (esp_now_register_recv_cb(onEspNowReceive) != ESP_OK) {
-    Serial.println("ESP-NOW CALLBACK: FAILED");
-    return;
-  }
-
-  // We do not know the S3 Wi-Fi channel yet, so start at channel 1
-  // and hop through channels until the first valid command arrives.
-  espNowChannel = ESPNOW_START_CHANNEL;
-  esp_wifi_set_channel(espNowChannel, WIFI_SECOND_CHAN_NONE);
-
-  Serial.println("ESP-NOW INIT: OK");
-  Serial.println("CHANNEL SEARCH: 1-13");
-  Serial.println("WAITING FOR S3...");
-}
-
-void updateEspNowChannelSearch() {
-
-  if (espNowChannelLocked) {
-    return;
-  }
-
-  if (millis() - lastEspNowHop < ESPNOW_HOP_MS) {
-    return;
-  }
-
-  lastEspNowHop = millis();
-
-  espNowChannel++;
-
-  if (espNowChannel > ESPNOW_END_CHANNEL) {
-    espNowChannel = ESPNOW_START_CHANNEL;
-  }
-
-  esp_wifi_set_channel(
-    espNowChannel,
-    WIFI_SECOND_CHAN_NONE
-  );
-}
-
-void processEspNowCommand() {
-
-  if (!espNowCommandPending) {
-    return;
-  }
-
-  char command = espNowPendingCommand;
-
-  espNowCommandPending = false;
-
-  Serial.print("[ESP-NOW] RECEIVED: ");
-  Serial.println(command);
-
-  handleMotorCommand(command);
-}
-
-// =====================================================
 // SETUP
 // =====================================================
 
@@ -218,7 +79,6 @@ void setup() {
 
   Serial.begin(115200);
 
-  HC05.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
   NanoSerial.begin(9600, SERIAL_8N1, 27, 14);
 
   pinMode(ENA, OUTPUT);
@@ -228,6 +88,8 @@ void setup() {
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
+
+  startBluetoothLink();
 
   // Keep the motor-driver enable pins OFF during startup.
   // This prevents the connected motor driver from drawing unnecessary
@@ -245,7 +107,6 @@ void setup() {
   prefs.begin("agribot", false);
 
   // Route data remains stored in Preferences across restarts.
-  startEspNow();
 
   Serial.println();
   Serial.println("================================");
@@ -263,8 +124,8 @@ void setup() {
   Serial.println("Colors: red green blue yellow moon maroon peacock off");
   Serial.println("Effects: snake fade dj");
   Serial.println("================================");
-  Serial.println("ESP-NOW READY");
-  Serial.println("Website -> S3 -> ESP-NOW -> DevKit");
+  Serial.println("BLUETOOTH READY");
+  Serial.println("Website -> S3 -> HC-05 -> Bluetooth -> DevKit");
 }
 
 // =====================================================
@@ -293,8 +154,8 @@ void loop() {
     }
   }
 
-  updateEspNowChannelSearch();
-  processEspNowCommand();
+  updateBluetoothLink();
+  processBluetoothCommand();
 
   applyDrive();
   updateSnake();
@@ -302,10 +163,10 @@ void loop() {
   updateDJ();
 
   // =============================================
-  // BLUETOOTH INPUT (buffered)
+  // LEGACY HC-05 UART INPUT (not used in new architecture)
   // =============================================
 
-  if (HC05.available()) {
+  if (false) {
 
     char c = HC05.read();
 
