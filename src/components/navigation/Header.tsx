@@ -163,7 +163,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
         </div>
 
         {/* Zone 2: Navigation Links (Clean text links with hover state) */}
-        <nav className="hidden md:flex items-center gap-1 lg:gap-2">
+        <nav className={`hidden md:flex items-center gap-1 lg:gap-2 transition-all duration-200 ${isSearchOpen ? 'pr-[min(82vw,360px)]' : ''}`}>
           {navItems.map((item) => {
             const isActive = activeSection === item.id;
             return (
