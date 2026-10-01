@@ -162,6 +162,7 @@ export const NavigationControllerSection: React.FC = () => {
   const [esp32Status, setEsp32Status] = useState<'not-configured' | 'online' | 'offline'>('not-configured');
   const [esp32Message, setEsp32Message] = useState(DEVKIT_SETUP_MESSAGE);
   const commandHeartbeatRef = useRef<number | null>(null);
+  const heldNavigationKeysRef = useRef<Set<string>>(new Set());
   const dragRef = useRef<{ key: LayoutKey; dx: number; dy: number } | null>(null);
 
   useEffect(() => {
@@ -269,6 +270,7 @@ export const NavigationControllerSection: React.FC = () => {
       const command = keyToCommand[event.key];
       if (!command || isTypingTarget(event.target) || settingsOpen) return;
       event.preventDefault();
+      heldNavigationKeysRef.current.add(event.key);
       if (event.repeat) return;
       sendCommand(command);
     };
@@ -276,10 +278,17 @@ export const NavigationControllerSection: React.FC = () => {
     const handleKeyUp = (event: KeyboardEvent) => {
       if (!keyToCommand[event.key] || isTypingTarget(event.target) || settingsOpen) return;
       event.preventDefault();
-      stop();
+      heldNavigationKeysRef.current.delete(event.key);
+      // Only stop when the last movement key has been released.
+      // This prevents F -> R (or any other direction change) from
+      // sending an unwanted S between the two commands.
+      if (heldNavigationKeysRef.current.size === 0) stop();
     };
 
-    const handleWindowBlur = () => stop();
+    const handleWindowBlur = () => {
+      heldNavigationKeysRef.current.clear();
+      stop();
+    };
 
     document.addEventListener('keydown', handleKeyDown, true);
     document.addEventListener('keyup', handleKeyUp, true);
