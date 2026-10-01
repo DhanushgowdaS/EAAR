@@ -40,6 +40,8 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
     setIsSimulatorModalOpen,
     connectionMode,
     isSupabaseLive,
+    totalRows,
+    setTotalRows,
   } = useRover();
 
   if (!isOpen) return null;
@@ -206,6 +208,32 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+
+            {/* Field Configuration */}
+            <div className="pt-2 border-t border-emerald-950 space-y-2">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block">
+                Field Configuration
+              </span>
+              <div className="p-3 rounded-lg bg-[#09170e] border border-emerald-900/50 space-y-2">
+                <label className="text-xs text-slate-300 font-mono block" htmlFor="eaar-total-rows">
+                  Total Crop Rows
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="eaar-total-rows"
+                    type="number"
+                    min="1"
+                    max="100"
+                    step="1"
+                    value={totalRows}
+                    onChange={(e) => setTotalRows(Number(e.target.value))}
+                    className="w-24 px-3 py-2 rounded-lg bg-[#050e07] border border-emerald-900 text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-[11px] text-slate-500 font-mono">rows</span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-mono">Saved locally for this field.</p>
               </div>
             </div>
 
