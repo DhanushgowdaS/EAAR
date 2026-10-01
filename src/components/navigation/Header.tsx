@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRover } from '../../context/RoverContext';
-import { Menu, Wifi, Database, Radio, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Menu, Wifi, Database, Radio, Sparkles, SlidersHorizontal, Search, X } from 'lucide-react';
 
 interface HeaderProps {
   onOpenDrawer: () => void;
@@ -16,6 +16,87 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
     setIsConfigModalOpen,
     setIsSimulatorModalOpen,
   } = useRover();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  const sectionNames: Record<string, string> = {
+    home: 'Home',
+    architecture: 'Architecture',
+    results: 'Results & Environmental Conditions',
+    devices: 'Devices & Hardware',
+    'live-status': 'Live Status & Navigation',
+    'navigation-controller': 'Navigation Controller',
+  };
+
+  const searchTargets = [
+    { label: 'Home', keywords: ['home', 'overview', 'hero'] },
+    { label: 'Architecture', keywords: ['architecture', 'hardware', 'edge computing', 'esp32', 'raspberry pi', 'esp32-s3', 'hc-05', 'camera', 'supabase'] },
+    { label: 'Results', keywords: ['results', 'environment', 'temperature', 'humidity', 'soil moisture', 'moisture', 'disease', 'spraying', 'telemetry', 'ai'] },
+    { label: 'Devices', keywords: ['devices', 'device fleet', 'hardware', 'module', 'online', 'offline', 'diagnostic'] },
+    { label: 'Live Status', keywords: ['live status', 'navigation mode', 'current row', 'heading', 'obstacle', 'lidar', 'waypoint'] },
+    { label: 'Navigation Controller', keywords: ['navigation controller', 'arrow controller', 'joystick', 'training mode', 'automatic mode', 'manual mode', 'store to flash', 'end training', 'forward', 'backward', 'left', 'right', 'stop'] },
+  ];
+
+  const goToSearchResult = (query: string) => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return;
+
+    const target = searchTargets.find((item) =>
+      item.label.toLowerCase() === normalized ||
+      item.keywords.some((keyword) => keyword === normalized)
+    );
+
+    const scrollToMatch = () => {
+      const sections = Array.from(document.querySelectorAll('main section')) as HTMLElement[];
+      const tokens = normalized.split(/\\s+/).filter(Boolean);
+
+      let best: { element: HTMLElement; score: number } | null = null;
+      for (const section of sections) {
+        const text = (section.innerText || '').toLowerCase();
+        if (!text) continue;
+
+        const phraseScore = text.includes(normalized) ? 100 : 0;
+        const tokenScore = tokens.reduce((score, token) => score + (text.includes(token) ? 10 : 0), 0);
+        const score = phraseScore + tokenScore;
+
+        if (score > 0 && (!best || score > best.score)) {
+          best = { element: section, score };
+        }
+      }
+
+      if (best) {
+        best.element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+
+    setIsSearchFocused(false);
+    setSearchQuery('');
+
+    if (target) {
+      const id = target.label === 'Navigation Controller'
+        ? 'navigation-controller'
+        : target.label === 'Live Status'
+          ? 'live-status'
+          : target.label.toLowerCase();
+      setActiveSection(id);
+      window.setTimeout(scrollToMatch, 80);
+      return;
+    }
+
+    setActiveSection('home');
+    window.setTimeout(scrollToMatch, 80);
+  };
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      goToSearchResult(searchQuery);
+    }
+    if (event.key === 'Escape') {
+      setSearchQuery('');
+      setIsSearchFocused(false);
+    }
+  };
 
   const navItems = [
     { id: 'home', labelKey: 'nav_home' },
@@ -72,6 +153,62 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
             );
           })}
         </nav>
+
+        {/* Site Search */}
+        <div className="relative hidden lg:block w-48 xl:w-64">
+          <div className={`flex items-center gap-2 rounded-lg bg-[#09150d] border transition-colors ${isSearchFocused ? 'border-emerald-500/70' : 'border-emerald-900/60'}`}>
+            <Search className="w-4 h-4 ml-3 text-emerald-400/80 shrink-0" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onFocus={() => setIsSearchFocused(true)}
+              onKeyDown={handleSearchKeyDown}
+              onBlur={() => window.setTimeout(() => setIsSearchFocused(false), 150)}
+              placeholder="Search site..."
+              aria-label="Search EAAR site"
+              className="w-full bg-transparent px-1.5 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setSearchQuery('')}
+                className="mr-2 text-slate-500 hover:text-white"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {isSearchFocused && searchQuery.trim() && (
+            <div className="absolute top-full right-0 mt-2 w-72 rounded-xl bg-[#07120a] border border-emerald-900/70 shadow-2xl overflow-hidden z-50">
+              <div className="px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-slate-500 border-b border-emerald-950">
+                Press Enter to jump
+              </div>
+              {searchTargets
+                .filter((item) => {
+                  const q = searchQuery.toLowerCase().trim();
+                  return item.label.toLowerCase().includes(q) || item.keywords.some((keyword) => keyword.includes(q));
+                })
+                .slice(0, 6)
+                .map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => goToSearchResult(item.label)}
+                    className="w-full text-left px-3 py-2.5 text-xs font-mono text-slate-300 hover:bg-emerald-950/60 hover:text-emerald-300 transition-colors"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              <div className="px-3 py-2 text-[10px] font-mono text-slate-600 border-t border-emerald-950">
+                Searches page content too
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Zone 3: Actions & Real-Time Status & Hamburger Menu */}
         <div className="flex items-center gap-2 sm:gap-3">
