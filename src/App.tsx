@@ -13,6 +13,7 @@ import { ArchitectureSection } from './components/sections/ArchitectureSection';
 import { DevicesSection } from './components/sections/DevicesSection';
 import { ResultsSection } from './components/sections/ResultsSection';
 import { LiveStatusSection } from './components/sections/LiveStatusSection';
+import { NavigationControllerSection } from './components/sections/NavigationControllerSection';
 import { SupabaseConfigModal } from './components/modals/SupabaseConfigModal';
 import { FieldSimulatorDrawer } from './components/modals/FieldSimulatorDrawer';
 import { GeminiChatbot } from './components/chat/GeminiChatbot';
@@ -54,6 +55,7 @@ const RoverAppContent: React.FC = () => {
             <ResultsSection />
             <DevicesSection />
             <LiveStatusSection />
+            <NavigationControllerSection />
           </>
         )}
 
@@ -64,6 +66,8 @@ const RoverAppContent: React.FC = () => {
         {activeSection === 'devices' && <DevicesSection />}
 
         {activeSection === 'live-status' && <LiveStatusSection />}
+
+        {activeSection === 'navigation-controller' && <NavigationControllerSection />}
       </main>
 
       {/* Clean Engineering Footer */}
