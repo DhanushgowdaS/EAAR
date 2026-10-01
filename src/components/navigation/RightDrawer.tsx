@@ -236,7 +236,7 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                   <span className="text-[11px] text-slate-500 font-mono">rows</span>
                 </div>
                 <label className="text-xs text-slate-300 font-mono block" htmlFor="eaar-checkpoints-per-row">
-                  Checkpoints Per Row
+                  Total Checkpoints Per Row
                 </label>
                 <div className="flex items-center gap-2">
                   <input
