@@ -20,7 +20,7 @@ const ESP32_URL_KEY = 'eaar-navigation-esp32-url-v1';
 const DEVKIT_DEFAULT = 'http://eaar-devkit.local';
 const ESP32_API_KEY = 'eaar-navigation-esp32-api-key-v1';
 const DEVKIT_SETUP_MESSAGE = 'Enter the DevKit IP (or eaar-devkit.local) and API key, then SAVE LINK once.';
-const ESP32_HEARTBEAT_MS = 300;
+const ESP32_HEARTBEAT_MS = 100;
 
 const DEFAULT_LAYOUT: LayoutMap = {
   manual: { x: 12, y: 12, w: 11, h: 8 },
@@ -172,6 +172,18 @@ export const NavigationControllerSection: React.FC = () => {
     emitCommand('S');
     emitMode('manual');
 
+    // Warm up the DevKit connection so the first driving command does not
+    // have to pay the initial DNS/TCP connection setup delay.
+    const warmupUrl = localStorage.getItem(ESP32_URL_KEY) || DEVKIT_DEFAULT;
+    const warmupKey = localStorage.getItem(ESP32_API_KEY) || '';
+    if (warmupUrl && warmupKey) {
+      const baseUrl = warmupUrl.trim().replace(/\/+$/, '');
+      void fetch(
+        baseUrl + '/status?key=' + encodeURIComponent(warmupKey),
+        { method: 'GET', mode: 'cors', cache: 'no-store', keepalive: true }
+      ).catch(() => {});
+    }
+
     return () => {
       if (commandHeartbeatRef.current) window.clearInterval(commandHeartbeatRef.current);
       commandHeartbeatRef.current = null;
@@ -196,6 +208,8 @@ export const NavigationControllerSection: React.FC = () => {
       const response = await fetch(url, {
         method: 'GET',
         mode: 'cors',
+        cache: 'no-store',
+        keepalive: true,
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
