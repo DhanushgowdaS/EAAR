@@ -142,8 +142,13 @@ void processBluetoothCommand() {
     char c = (char)SerialBT.read();
 
     if (isNavigationCommand(c)) {
-      Serial.print("[BT] RECEIVED: ");
+      Serial.println();
+      Serial.println("================================");
+      Serial.println(" WEBSITE COMMAND RECEIVED");
+      Serial.print("COMMAND: ");
       Serial.println(c);
+      Serial.println("SOURCE: S3 -> HC-05 -> ESP32 DEVKIT");
+      Serial.println("================================");
       handleMotorCommand(c);
     }
   }
@@ -204,6 +209,7 @@ void setup() {
   Serial.println("================================");
   Serial.println("BLUETOOTH READY");
   Serial.println("Website -> S3 -> HC-05 -> Bluetooth -> DevKit");
+  Serial.println("Website commands will be printed above when received.");
 }
 
 // =====================================================
