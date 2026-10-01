@@ -147,7 +147,7 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                   {t('language_select')}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-4 gap-1.5">
                 {LANGUAGES.map((lang) => (
                   <button
                     key={lang.code}
