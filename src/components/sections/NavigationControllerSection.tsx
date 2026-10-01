@@ -258,6 +258,31 @@ export const NavigationControllerSection: React.FC = () => {
     }
   };
 
+  const sendBrightness = async (level: number) => {
+    const baseUrl = normalizedEsp32Url();
+    const key = esp32ApiKey.trim();
+    if (!baseUrl || !key) {
+      setEsp32Message(DEVKIT_SETUP_MESSAGE);
+      return false;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 900);
+    try {
+      const url = baseUrl + '/brightness?level=' + Math.round(clamp(level, 0, 255)) + '&key=' + encodeURIComponent(key);
+      const response = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store', keepalive: true, signal: controller.signal });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      localStorage.setItem('eaar-navigation-led-brightness-v1', String(Math.round(clamp(level, 0, 255))));
+      setEsp32Status('online');
+      setEsp32Message('LED brightness updated');
+      return true;
+    } catch {
+      setEsp32Status('offline');
+      setEsp32Message('LED brightness update failed — check DevKit connection');
+      return false;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
   const sendSpeedSettings = async (nextForwardBackward: number, nextLeftRight: number) => {
     const baseUrl = normalizedEsp32Url();
     const key = esp32ApiKey.trim();
@@ -339,9 +364,18 @@ export const NavigationControllerSection: React.FC = () => {
       if (!command) return;
       void sendToEsp32(command);
     };
+    const handleBrightness = (event: Event) => {
+      const level = (event as CustomEvent<{ level?: number }>).detail?.level;
+      if (typeof level !== 'number' || !Number.isFinite(level)) return;
+      void sendBrightness(level);
+    };
 
     window.addEventListener('eaar-lighting-command', handleLightingCommand);
-    return () => window.removeEventListener('eaar-lighting-command', handleLightingCommand);
+    window.addEventListener('eaar-lighting-brightness', handleBrightness);
+    return () => {
+      window.removeEventListener('eaar-lighting-command', handleLightingCommand);
+      window.removeEventListener('eaar-lighting-brightness', handleBrightness);
+    };
   }, [esp32Url, esp32ApiKey]);
 
   useEffect(() => {
