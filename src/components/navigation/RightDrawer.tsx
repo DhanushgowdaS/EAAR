@@ -325,7 +325,7 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                         const level = Number(e.target.value);
                         const fill = document.getElementById("eaar-brightness-fill");
                         if (fill) fill.style.width = ((level / 255) * 100) + "%";
-                        window.dispatchEvent(new CustomEvent("eaar-lighting-brightness", { detail: { level } }));
+                        void sendBrightnessDirect(level); window.dispatchEvent(new CustomEvent("eaar-lighting-brightness", { detail: { level } }));
                       }}
                       className="relative z-10 w-full h-8 appearance-none bg-transparent cursor-pointer accent-amber-300"
                     />
