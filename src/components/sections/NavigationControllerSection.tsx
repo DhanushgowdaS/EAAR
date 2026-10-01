@@ -24,6 +24,10 @@ const DEVKIT_DEFAULT = 'http://eaar-devkit.local';
 const ESP32_API_KEY = 'eaar-navigation-esp32-api-key-v1';
 const DEVKIT_SETUP_MESSAGE = 'Enter the DevKit IP (or eaar-devkit.local) and API key, then SAVE LINK once.';
 const ESP32_HEARTBEAT_MS = 50;
+const SPEED_SETTINGS_KEY = 'eaar-navigation-speed-settings-v1';
+const DEFAULT_FORWARD_BACKWARD_SPEED = 225;
+const DEFAULT_LEFT_RIGHT_SPEED = 255;
+const SPEED_STEP = 5;
 
 const DEFAULT_LAYOUT: LayoutMap = {
   manual: { x: 12, y: 12, w: 11, h: 8 },
@@ -99,6 +103,18 @@ const CommandButton: React.FC<{
   </button>
 );
 
+const SpeedDial: React.FC<{
+  label: string; value: number; onDecrease: () => void; onIncrease: () => void;
+}> = ({ label, value, onDecrease, onIncrease }) => (
+  <div className="relative w-[88px] h-[88px] rounded-full border border-cyan-500/40 bg-[radial-gradient(circle_at_35%_30%,#24343b,#091015_68%,#05080a)] shadow-[inset_0_0_18px_rgba(0,0,0,0.75),0_8px_18px_rgba(0,0,0,0.35)] flex flex-col items-center justify-center font-mono">
+    <span className="text-[8px] tracking-widest text-cyan-300">{label}</span>
+    <span className="text-xl font-black text-white leading-none mt-1">{value}</span>
+    <div className="absolute left-1/2 bottom-1 -translate-x-1/2 flex gap-1">
+      <button type="button" onClick={onDecrease} aria-label={label + ' speed down'} className="w-5 h-5 rounded-full border border-slate-600 bg-slate-900 text-slate-200 text-[11px] leading-none hover:border-cyan-400 hover:text-cyan-200">−</button>
+      <button type="button" onClick={onIncrease} aria-label={label + ' speed up'} className="w-5 h-5 rounded-full border border-cyan-600/60 bg-cyan-950 text-cyan-200 text-[11px] leading-none hover:border-cyan-300">+</button>
+    </div>
+  </div>
+);
 const Joystick: React.FC<{
   activeCommand: NavigationCommand; onCommand: (command: NavigationCommand) => void; onStop: () => void;
 }> = ({ activeCommand, onCommand, onStop }) => {
@@ -164,6 +180,8 @@ export const NavigationControllerSection: React.FC = () => {
   const [esp32ApiKey, setEsp32ApiKey] = useState('');
   const [esp32Status, setEsp32Status] = useState<'not-configured' | 'online' | 'offline'>('not-configured');
   const [esp32Message, setEsp32Message] = useState(DEVKIT_SETUP_MESSAGE);
+  const [forwardBackwardSpeed, setForwardBackwardSpeed] = useState(DEFAULT_FORWARD_BACKWARD_SPEED);
+  const [leftRightSpeed, setLeftRightSpeed] = useState(DEFAULT_LEFT_RIGHT_SPEED);
   const commandHeartbeatRef = useRef<number | null>(null);
   const stopBurstTimersRef = useRef<number[]>([]);
   const heldNavigationKeysRef = useRef<Set<string>>(new Set());
@@ -175,6 +193,12 @@ export const NavigationControllerSection: React.FC = () => {
       if (saved) setLayout({ ...DEFAULT_LAYOUT, ...JSON.parse(saved) });
       setEsp32Url(localStorage.getItem(ESP32_URL_KEY) || DEVKIT_DEFAULT);
       setEsp32ApiKey(localStorage.getItem(ESP32_API_KEY) || '');
+      const savedSpeed = localStorage.getItem(SPEED_SETTINGS_KEY);
+      if (savedSpeed) {
+        const parsed = JSON.parse(savedSpeed);
+        if (Number.isFinite(parsed.forwardBackward)) setForwardBackwardSpeed(clamp(parsed.forwardBackward, 0, 255));
+        if (Number.isFinite(parsed.leftRight)) setLeftRightSpeed(clamp(parsed.leftRight, 0, 255));
+      }
     } catch {}
     emitCommand('S');
     emitMode('manual');
@@ -234,6 +258,43 @@ export const NavigationControllerSection: React.FC = () => {
     }
   };
 
+  const sendSpeedSettings = async (nextForwardBackward: number, nextLeftRight: number) => {
+    const baseUrl = normalizedEsp32Url();
+    const key = esp32ApiKey.trim();
+    if (!baseUrl || !key) {
+      setEsp32Message(DEVKIT_SETUP_MESSAGE);
+      return false;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 900);
+    try {
+      const url = baseUrl + '/speed?fb=' + Math.round(nextForwardBackward) + '&lr=' + Math.round(nextLeftRight) + '&key=' + encodeURIComponent(key);
+      const response = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store', keepalive: true, signal: controller.signal });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      localStorage.setItem(SPEED_SETTINGS_KEY, JSON.stringify({ forwardBackward: nextForwardBackward, leftRight: nextLeftRight }));
+      setEsp32Status('online');
+      setEsp32Message('Speed updated: F/B ' + Math.round(nextForwardBackward) + ' · L/R ' + Math.round(nextLeftRight));
+      return true;
+    } catch {
+      setEsp32Status('offline');
+      setEsp32Message('Speed update failed — check DevKit connection');
+      return false;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+
+  const adjustForwardBackwardSpeed = (delta: number) => {
+    const next = clamp(forwardBackwardSpeed + delta, 0, 255);
+    setForwardBackwardSpeed(next);
+    void sendSpeedSettings(next, leftRightSpeed);
+  };
+
+  const adjustLeftRightSpeed = (delta: number) => {
+    const next = clamp(leftRightSpeed + delta, 0, 255);
+    setLeftRightSpeed(next);
+    void sendSpeedSettings(forwardBackwardSpeed, next);
+  };
   const startCommandHeartbeat = (command: NavigationCommand) => {
     if (commandHeartbeatRef.current) window.clearInterval(commandHeartbeatRef.current);
     if (command === 'S') return;
@@ -533,6 +594,11 @@ export const NavigationControllerSection: React.FC = () => {
                 <div className="flex items-center justify-between"><span className="text-[9px] font-mono tracking-widest text-slate-600">ROVER MODE</span><span className="text-[9px] font-mono text-emerald-400">{roverMode.toUpperCase()}</span></div>
                 <div className="mt-4 text-center"><div className="text-[9px] font-mono tracking-widest text-slate-600">CURRENT COMMAND</div><div className="mt-1 text-4xl font-black font-mono text-white tracking-widest">{activeCommand}</div></div>
                 <div className="mt-4 h-px bg-slate-800" />
+                <div className="mt-3 text-center text-[8px] font-mono tracking-widest text-slate-600">SPEED CONTROL</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 justify-items-center">
+                  <SpeedDial label="F / B" value={forwardBackwardSpeed} onDecrease={() => adjustForwardBackwardSpeed(-SPEED_STEP)} onIncrease={() => adjustForwardBackwardSpeed(SPEED_STEP)} />
+                  <SpeedDial label="L / R" value={leftRightSpeed} onDecrease={() => adjustLeftRightSpeed(-SPEED_STEP)} onIncrease={() => adjustLeftRightSpeed(SPEED_STEP)} />
+                </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[9px] font-mono">
                   <div className="rounded-xl bg-slate-900/70 border border-slate-800 p-2"><div className="text-slate-600">TRAINING</div><div className={(roverMode === 'training' && !trainingEnded ? 'text-amber-300' : 'text-slate-500') + ' mt-1'}>{roverMode === 'training' && !trainingEnded ? 'RECORDING' : trainingEnded ? 'ENDED' : 'IDLE'}</div></div>
                   <div className="rounded-xl bg-slate-900/70 border border-slate-800 p-2"><div className="text-slate-600">FLASH</div><div className={(flashRequested ? 'text-emerald-300' : 'text-slate-500') + ' mt-1'}>{flashRequested ? 'STORED' : 'READY'}</div></div>
