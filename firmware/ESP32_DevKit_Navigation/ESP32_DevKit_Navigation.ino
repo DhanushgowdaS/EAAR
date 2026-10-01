@@ -12,6 +12,7 @@
 #define IN4 22
 
 #define SPEED 225
+#define TURN_SPEED 255
 #define CORR_AMOUNT 40
 #define MAX_RECORDS 100
 
@@ -784,8 +785,15 @@ void applyDrive() {
     return;
   }
 
+  // Forward/backward keeps the existing SPEED value (225).
+  // Left/right turns use full PWM speed (255) for quicker turning.
   int leftSpeed = SPEED;
   int rightSpeed = SPEED;
+
+  if (currentState == 'L' || currentState == 'R') {
+    leftSpeed = TURN_SPEED;
+    rightSpeed = TURN_SPEED;
+  }
 
   // During automatic playback or recording, use full configured speed.
   if (!automaticMode && !recording &&
