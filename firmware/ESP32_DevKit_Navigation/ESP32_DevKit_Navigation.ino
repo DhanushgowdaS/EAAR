@@ -98,7 +98,7 @@ bool isNavigationCommand(char command) {
 
 uint8_t forwardBackwardSpeed = DEFAULT_SPEED;
 uint8_t leftRightSpeed = DEFAULT_TURN_SPEED;
-uint8_t ledBrightness = 200;
+uint8_t ledBrightness = 255;
 
 bool isLightingCommand(char command) {
   return command == '1' || command == '2' ||
@@ -417,9 +417,9 @@ void setup() {
   stopMotor();
 
   strip.begin();
-  // Keep NeoPixels at a moderate brightness to reduce 5V current draw.
+  // Use full NeoPixel brightness by default; the website can reduce it remotely.
   prefs.begin("agribot", false);
-  ledBrightness = prefs.getUChar("ledBright", 200);
+  ledBrightness = prefs.getUChar("ledBright", 255);
   strip.setBrightness(ledBrightness);
   strip.show();
   forwardBackwardSpeed = prefs.getUChar("fbSpeed", DEFAULT_SPEED);
