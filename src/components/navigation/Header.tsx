@@ -20,57 +20,61 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
+  const getSearchMatches = (query: string) => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return [];
+
+    const tokens = normalized.split(/\\s+/).filter(Boolean);
+    const sections = Array.from(document.querySelectorAll('main section')) as HTMLElement[];
+    const matches: Array<{ element: HTMLElement; score: number; label: string }> = [];
+
+    sections.forEach((section) => {
+      const candidates = Array.from(
+        section.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,li,button,[role="status"],[class*="rounded-xl"],[class*="rounded-2xl"]')
+      ) as HTMLElement[];
+
+      candidates.forEach((element) => {
+        if (element.closest('header')) return;
+
+        const text = (element.innerText || '').replace(/\\s+/g, ' ').trim();
+        const lower = text.toLowerCase();
+        if (!text || text.length > 900) return;
+
+        const phrase = lower.includes(normalized);
+        const tokenHits = tokens.filter((token) => lower.includes(token)).length;
+        if (!phrase && tokenHits === 0) return;
+
+        const headingBoost = /^H[1-6]$/.test(element.tagName) ? 25 : 0;
+        const phraseBoost = phrase ? 100 : 0;
+        const tokenScore = tokenHits * 12;
+
+        // Prefer a useful content/card block, but prefer the smallest useful
+        // block when several nested elements contain the same search term.
+        const compactness = text.length <= 240 ? 18 : text.length <= 500 ? 10 : 3;
+        const score = phraseBoost + tokenScore + headingBoost + compactness;
+
+        matches.push({
+          element,
+          score,
+          label: text.length > 90 ? text.slice(0, 87) + '...' : text,
+        });
+      });
+    });
+
+    return matches
+      .sort((a, b) => b.score - a.score || a.label.length - b.label.length)
+      .filter((match, index, list) =>
+        index === list.findIndex((item) => item.label.toLowerCase() === match.label.toLowerCase())
+      )
+      .slice(0, 8);
+  };
+
   const goToSearchResult = (query: string) => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return;
 
-    const tokens = normalized.split(/\\s+/).filter(Boolean);
-    const sections = Array.from(document.querySelectorAll('main section')) as HTMLElement[];
-
-    let best: { element: HTMLElement; score: number; section: HTMLElement } | null = null;
-
-    for (const section of sections) {
-      const sectionText = (section.innerText || '').toLowerCase();
-      if (!sectionText) continue;
-
-      const phraseScore = sectionText.includes(normalized) ? 100 : 0;
-      const tokenScore = tokens.reduce(
-        (score, token) => score + (sectionText.includes(token) ? 12 : 0),
-        0
-      );
-
-      if (phraseScore + tokenScore === 0) continue;
-
-      // Find the most specific visible content block containing the search text.
-      const candidates = Array.from(
-        section.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,button,div')
-      ) as HTMLElement[];
-
-      for (const element of candidates) {
-        const text = (element.innerText || '').trim().toLowerCase();
-        if (!text || text.length > 700) continue;
-
-        const exact = text.includes(normalized) ? 80 : 0;
-        const words = tokens.reduce((score, token) => score + (text.includes(token) ? 8 : 0), 0);
-        if (exact + words === 0) continue;
-
-        // Prefer a meaningful card/container around the matched text rather than
-        // jumping to a tiny label such as an individual word.
-        const card =
-          element.closest('[class*="rounded-2xl"]') ||
-          element.closest('[class*="rounded-xl"]') ||
-          element;
-
-        const cardElement = card as HTMLElement;
-        const cardText = (cardElement.innerText || '').trim();
-        const sizeBonus = cardText.length >= 40 && cardText.length <= 900 ? 15 : 0;
-        const score = phraseScore + tokenScore + exact + words + sizeBonus;
-
-        if (!best || score > best.score) {
-          best = { element: cardElement, score, section };
-        }
-      }
-    }
+    const matches = getSearchMatches(normalized);
+    const best = matches[0];
 
     setIsSearchFocused(false);
     setSearchQuery('');
@@ -80,13 +84,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
       return;
     }
 
-    // If no exact content is found, keep the user at Home rather than
-    // pretending that an unrelated section matched.
-    setActiveSection('home');
-    window.setTimeout(() => {
-      const home = document.querySelector('main section');
-      home?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 80);
+    // Nothing on the current rendered page matched. Do not redirect to an
+    // unrelated section; simply leave the user where they are.
   };
 
 
@@ -184,23 +183,36 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
           </div>
 
           {isSearchFocused && searchQuery.trim() && (
-            <div className="absolute top-full right-0 mt-2 w-72 rounded-xl bg-[#07120a] border border-emerald-900/70 shadow-2xl overflow-hidden z-50">
+            <div className="absolute top-full right-0 mt-2 w-80 rounded-xl bg-[#07120a] border border-emerald-900/70 shadow-2xl overflow-hidden z-50">
               <button
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => goToSearchResult(searchQuery)}
-                className="w-full text-left px-3 py-3 text-xs font-mono text-emerald-300 hover:bg-emerald-950/60 transition-colors"
+                className="w-full text-left px-3 py-3 text-xs font-mono text-emerald-300 hover:bg-emerald-950/60 transition-colors border-b border-emerald-950"
               >
                 <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">
-                  Search entire page
+                  Search all website content
                 </span>
-                Jump to “{searchQuery.trim()}”
+                Press Enter or click to jump to the best match
               </button>
-              <div className="px-3 py-2 text-[10px] font-mono text-slate-600 border-t border-emerald-950">
-                Searches every visible word and content block
-              </div>
+              {getSearchMatches(searchQuery).map((match, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => goToSearchResult(match.label)}
+                  className="w-full text-left px-3 py-2.5 text-xs font-mono text-slate-300 hover:bg-emerald-950/60 hover:text-emerald-300 transition-colors"
+                >
+                  {match.label}
+                </button>
+              ))}
+              {getSearchMatches(searchQuery).length === 0 && (
+                <div className="px-3 py-3 text-xs font-mono text-slate-500">
+                  No matching content found on the page.
+                </div>
+              )}
             </div>
-          )}
+          )}}
         </div>
 
         {/* Zone 3: Actions & Real-Time Status & Hamburger Menu */}
