@@ -1311,32 +1311,37 @@ void startAutomatic() {
 
     if (command == 'F') {
 
+      currentState = 'F';
       forward();
     }
 
     else if (command == 'B') {
 
+      currentState = 'B';
       backward();
     }
 
     else if (command == 'L') {
 
+      currentState = 'L';
       left();
     }
 
     else if (command == 'R') {
 
+      currentState = 'R';
       right();
     }
 
     else if (command == 'S') {
 
+      currentState = 'S';
       stopMotor();
     }
 
     // Direction functions set the H-bridge pins, while applyDrive()
-    // supplies the PWM speed. Apply it before waiting for the
-    // recorded duration so the rover actually moves automatically.
+    // supplies the PWM speed. Keep currentState synchronized with the
+    // recorded command so applyDrive() does not immediately disable PWM.
     applyDrive();
 
     delay(duration);
@@ -1345,6 +1350,7 @@ void startAutomatic() {
   }
 
   automaticMode = false;
+  currentState = 'S';
 
   stopMotor();
 
