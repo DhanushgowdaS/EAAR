@@ -4,7 +4,7 @@ import { RoverFiber } from '../3d/RoverFiber';
 import { ArrowRight, Activity, Cpu, ShieldCheck, Zap, Sparkles, Navigation, Droplets } from 'lucide-react';
 
 export const HeroSection: React.FC = () => {
-  const { setActiveSection, t, environment, robotStatus } = useRover();
+  const { setActiveSection, t, environment, robotStatus, totalRows } = useRover();
 
   return (
     <section className="relative pt-6 pb-20 overflow-hidden">
