@@ -234,6 +234,48 @@ export const NavigationControllerSection: React.FC = () => {
     startCommandHeartbeat(command);
   };
 
+  useEffect(() => {
+    const keyToCommand: Record<string, NavigationCommand> = {
+      ArrowUp: 'F',
+      ArrowDown: 'B',
+      ArrowLeft: 'L',
+      ArrowRight: 'R',
+    };
+
+    const isTypingTarget = (target: EventTarget | null) => {
+      const element = target as HTMLElement | null;
+      if (!element) return false;
+      const tag = element.tagName?.toLowerCase();
+      return tag === 'input' || tag === 'textarea' || tag === 'select' || element.isContentEditable;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const command = keyToCommand[event.key];
+      if (!command || isTypingTarget(event.target) || settingsOpen) return;
+      event.preventDefault();
+      if (event.repeat) return;
+      sendCommand(command);
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (!keyToCommand[event.key] || isTypingTarget(event.target) || settingsOpen) return;
+      event.preventDefault();
+      stop();
+    };
+
+    const handleWindowBlur = () => stop();
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [settingsOpen, stop]);
+
   const changeRoverMode = (nextMode: RoverMode) => {
     stop();
     setRoverMode(nextMode);
