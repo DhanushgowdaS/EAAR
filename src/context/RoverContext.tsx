@@ -38,6 +38,8 @@ interface RoverContextType {
   setConnectionMode: (mode: 'supabase' | 'demo') => void;
   totalRows: number;
   setTotalRows: (rows: number) => void;
+  checkpointsPerRow: number;
+  setCheckpointsPerRow: (checkpoints: number) => void;
   supabaseError: string | null;
   lastPacketTimestamp: string | null;
 
@@ -92,6 +94,17 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const value = Math.max(1, Math.min(100, Math.round(rows)));
     setTotalRowsState(value);
     localStorage.setItem('EAAR_TOTAL_ROWS', String(value));
+  };
+
+  const [checkpointsPerRow, setCheckpointsPerRowState] = useState<number>(() => {
+    const saved = Number(localStorage.getItem('EAAR_CHECKPOINTS_PER_ROW'));
+    return Number.isInteger(saved) && saved >= 1 && saved <= 100 ? saved : 6;
+  });
+
+  const setCheckpointsPerRow = (checkpoints: number) => {
+    const value = Math.max(1, Math.min(100, Math.round(checkpoints)));
+    setCheckpointsPerRowState(value);
+    localStorage.setItem('EAAR_CHECKPOINTS_PER_ROW', String(value));
   };
 
   // Language state (persisted in localStorage)
@@ -674,6 +687,8 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setConnectionMode,
         totalRows,
         setTotalRows,
+        checkpointsPerRow,
+        setCheckpointsPerRow,
         supabaseError,
         lastPacketTimestamp,
         injectHardwareReading,
