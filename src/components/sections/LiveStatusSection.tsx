@@ -20,6 +20,7 @@ import {
 
 export const LiveStatusSection: React.FC = () => {
   const { robotStatus, injectRobotStatus, totalRows, t } = useRover();
+  const CHECKPOINTS_PER_ROW = 6;
 
   const handleNextStep = () => {
     const nextStep = (robotStatus.current_step + 1) % (robotStatus.total_steps || 120);
@@ -174,7 +175,7 @@ export const LiveStatusSection: React.FC = () => {
                 Visual Navigation Progress
               </span>
               <h4 className="text-xl font-heading font-bold text-white mt-0.5">
-                {t('crop_field_map')} ({totalRows} Rows × 15 Checkpoints)
+                {t('crop_field_map')} ({totalRows} Rows × {CHECKPOINTS_PER_ROW} Checkpoints)
               </h4>
             </div>
 
@@ -223,11 +224,11 @@ export const LiveStatusSection: React.FC = () => {
 
                   {/* Waypoint Nodes along the Row */}
                   <div className="flex-1 flex items-center justify-between gap-1">
-                    {[...Array(15)].map((_, wIdx) => {
-                      const stepIndex = (rowNum - 1) * 15 + wIdx;
+                    {[...Array(CHECKPOINTS_PER_ROW)].map((_, wIdx) => {
+                      const stepIndex = (rowNum - 1) * CHECKPOINTS_PER_ROW + wIdx;
                       const isRoverHere =
                         isCurrentRow &&
-                        Math.floor((robotStatus.current_step % 120) / 8) === wIdx;
+                        Math.floor((robotStatus.current_step % (totalRows * CHECKPOINTS_PER_ROW)) / CHECKPOINTS_PER_ROW) === wIdx;
                       const isInspected =
                         rowNum < robotStatus.current_row ||
                         (isCurrentRow && wIdx <= Math.floor((robotStatus.current_step % 120) / 8));
