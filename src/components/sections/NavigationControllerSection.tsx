@@ -178,7 +178,7 @@ export const NavigationControllerSection: React.FC = () => {
     };
   }, []);
 
-  const normalizedEsp32Url = () => esp32Url.trim().replace(/\\/+$/, '');
+  const normalizedEsp32Url = () => esp32Url.trim().replace(/\/+$/, '');
 
   const sendToEsp32 = async (command: NavigationCommand) => {
     const baseUrl = normalizedEsp32Url();
