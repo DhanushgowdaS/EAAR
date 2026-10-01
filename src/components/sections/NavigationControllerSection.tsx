@@ -1,16 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CircleStop, Gamepad2, Navigation2,
-  Play, Radio, RotateCcw, Save, Settings, Square, TimerReset, Zap, Wifi, Link2,
+  Play, Radio, RotateCcw, Save, Settings, Square, Trash2, TimerReset, Zap, Wifi, Link2,
 } from 'lucide-react';
 
 type ControllerMode = 'arrow' | 'joystick';
 type RoverMode = 'manual' | 'training' | 'auto';
 type NavigationCommand = 'F' | 'B' | 'L' | 'R' | 'S';
+type DevKitCommand = NavigationCommand | 'T' | 'E' | 'M' | 'A' | 'D';
 type LayoutKey =
   | 'manual' | 'training' | 'auto'
   | 'forward' | 'back' | 'left' | 'right' | 'stop'
-  | 'status' | 'emergency' | 'endTraining' | 'storeFlash' | 'joystick';
+  | 'status' | 'emergency' | 'endTraining' | 'storeFlash' | 'deleteFlash' | 'joystick';
 
 type LayoutPosition = { x: number; y: number; w: number; h: number };
 type LayoutMap = Record<LayoutKey, LayoutPosition>;
@@ -35,6 +36,7 @@ const DEFAULT_LAYOUT: LayoutMap = {
   emergency: { x: 45, y: 64, w: 11, h: 16 },
   endTraining: { x: 68, y: 34, w: 17, h: 11 },
   storeFlash: { x: 68, y: 48, w: 17, h: 11 },
+  deleteFlash: { x: 68, y: 62, w: 17, h: 11 },
   joystick: { x: 9, y: 29, w: 28, h: 48 },
 };
 
@@ -192,7 +194,7 @@ export const NavigationControllerSection: React.FC = () => {
 
   const normalizedEsp32Url = () => esp32Url.trim().replace(/\/+$/, '');
 
-  const sendToEsp32 = async (command: NavigationCommand) => {
+  const sendToEsp32 = async (command: DevKitCommand) => {
     const baseUrl = normalizedEsp32Url();
     const key = esp32ApiKey.trim();
     if (!baseUrl || !key) {
@@ -309,6 +311,7 @@ export const NavigationControllerSection: React.FC = () => {
     stop();
     setTrainingEnded(true);
     emitAction('end-training');
+    void sendToEsp32('E');
   };
 
   const storeToFlash = () => {
@@ -316,6 +319,14 @@ export const NavigationControllerSection: React.FC = () => {
     setFlashRequested(true);
     emitAction('store-to-flash');
     void sendToEsp32('M');
+  };
+
+  const deleteStoredRoute = () => {
+    stop();
+    setFlashRequested(false);
+    setTrainingEnded(false);
+    setRoverMode('manual');
+    void sendToEsp32('D');
   };
 
   const saveEsp32Connection = () => {
@@ -501,6 +512,13 @@ export const NavigationControllerSection: React.FC = () => {
               <button type="button" onClick={storeToFlash} disabled={settingsOpen || !trainingEnded}
                 className="w-full h-full rounded-2xl border border-emerald-700/70 bg-gradient-to-b from-emerald-800 to-emerald-950 text-emerald-100 shadow-[inset_0_2px_2px_rgba(255,255,255,0.08),0_8px_18px_rgba(0,0,0,0.3)] disabled:opacity-35 hover:border-emerald-300 transition-all">
                 <span className="flex items-center justify-center gap-2 font-mono text-[10px] tracking-wider"><Save className="w-4 h-4" />STORE TO FLASH</span>
+              </button>
+            )}
+
+            {movable('deleteFlash',
+              <button type="button" onClick={deleteStoredRoute} disabled={settingsOpen}
+                className="w-full h-full rounded-2xl border border-rose-700/70 bg-gradient-to-b from-rose-900 to-rose-950 text-rose-100 shadow-[inset_0_2px_2px_rgba(255,255,255,0.08),0_8px_18px_rgba(0,0,0,0.3)] disabled:opacity-35 hover:border-rose-300 transition-all">
+                <span className="flex items-center justify-center gap-2 font-mono text-[10px] tracking-wider"><Trash2 className="w-4 h-4" />DELETE</span>
               </button>
             )}
           </div>
