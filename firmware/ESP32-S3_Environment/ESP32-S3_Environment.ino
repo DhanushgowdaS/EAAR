@@ -286,7 +286,7 @@ void handleCommand() {
   json += "\"command\":\"";
   json += command;
   json += "\",";
-  json += "\"forwarded\":\"ESP-NOW\"";
+  json += "\"forwarded\":\"HC-05 Bluetooth\"";
   json += "}";
 
   server.send(
