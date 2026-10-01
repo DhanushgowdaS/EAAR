@@ -36,6 +36,8 @@ interface RoverContextType {
   isSupabaseLive: boolean;
   connectionMode: 'supabase' | 'demo';
   setConnectionMode: (mode: 'supabase' | 'demo') => void;
+  totalRows: number;
+  setTotalRows: (rows: number) => void;
   supabaseError: string | null;
   lastPacketTimestamp: string | null;
 
@@ -81,6 +83,16 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
   const [isSimulatorModalOpen, setIsSimulatorModalOpen] = useState<boolean>(false);
+  const [totalRows, setTotalRowsState] = useState<number>(() => {
+    const saved = Number(localStorage.getItem('EAAR_TOTAL_ROWS'));
+    return Number.isInteger(saved) && saved >= 1 && saved <= 100 ? saved : 8;
+  });
+
+  const setTotalRows = (rows: number) => {
+    const value = Math.max(1, Math.min(100, Math.round(rows)));
+    setTotalRowsState(value);
+    localStorage.setItem('EAAR_TOTAL_ROWS', String(value));
+  };
 
   // Language state (persisted in localStorage)
   const [language, setLanguageState] = useState<SupportedLanguage>(() => {
@@ -613,6 +625,8 @@ export const RoverProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isSupabaseLive,
         connectionMode,
         setConnectionMode,
+        totalRows,
+        setTotalRows,
         supabaseError,
         lastPacketTimestamp,
         injectHardwareReading,
