@@ -17,6 +17,7 @@ type LayoutMap = Record<LayoutKey, LayoutPosition>;
 
 const STORAGE_KEY = 'eaar-navigation-controller-layout-v1';
 const ESP32_URL_KEY = 'eaar-navigation-esp32-url-v1';
+const S3_GATEWAY_DEFAULT = 'http://10.102.214.176';
 const ESP32_API_KEY = 'eaar-navigation-esp32-api-key-v1';
 const ESP32_HEARTBEAT_MS = 300;
 
@@ -153,10 +154,10 @@ export const NavigationControllerSection: React.FC = () => {
   const [layout, setLayout] = useState<LayoutMap>(DEFAULT_LAYOUT);
   const [draftLayout, setDraftLayout] = useState<LayoutMap>(DEFAULT_LAYOUT);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [esp32Url, setEsp32Url] = useState('');
+  const [esp32Url, setEsp32Url] = useState(S3_GATEWAY_DEFAULT);
   const [esp32ApiKey, setEsp32ApiKey] = useState('');
   const [esp32Status, setEsp32Status] = useState<'not-configured' | 'online' | 'offline'>('not-configured');
-  const [esp32Message, setEsp32Message] = useState('ESP32 DevKit not configured');
+  const [esp32Message, setEsp32Message] = useState('ESP32-S3 gateway not configured');
   const commandHeartbeatRef = useRef<number | null>(null);
   const dragRef = useRef<{ key: LayoutKey; dx: number; dy: number } | null>(null);
 
@@ -164,7 +165,7 @@ export const NavigationControllerSection: React.FC = () => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setLayout({ ...DEFAULT_LAYOUT, ...JSON.parse(saved) });
-      setEsp32Url(localStorage.getItem(ESP32_URL_KEY) || '');
+      setEsp32Url(localStorage.getItem(ESP32_URL_KEY) || S3_GATEWAY_DEFAULT);
       setEsp32ApiKey(localStorage.getItem(ESP32_API_KEY) || '');
     } catch {}
     emitCommand('S');
@@ -196,11 +197,11 @@ export const NavigationControllerSection: React.FC = () => {
       const response = await fetch(request);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setEsp32Status('online');
-      setEsp32Message(`ESP32 DevKit received ${command}`);
+      setEsp32Message(`ESP32-S3 received ${command}`);
       return true;
     } catch {
       setEsp32Status('offline');
-      setEsp32Message('ESP32 DevKit unreachable');
+      setEsp32Message('ESP32-S3 gateway unreachable');
       return false;
     } finally {
       window.clearTimeout(timeout);
@@ -353,20 +354,20 @@ export const NavigationControllerSection: React.FC = () => {
           <div className="flex flex-col lg:flex-row lg:items-end gap-3">
             <div className="flex-1">
               <div className="flex items-center gap-2 text-[10px] font-mono tracking-widest text-cyan-300 uppercase mb-2">
-                <Wifi className="w-3.5 h-3.5" /> ESP32 DEVKIT LINK
+                <Wifi className="w-3.5 h-3.5" /> ESP32-S3 GATEWAY LINK
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input
                   value={esp32Url}
                   onChange={(event) => setEsp32Url(event.target.value)}
-                  placeholder="http://192.168.1.50"
-                  aria-label="ESP32 DevKit address"
+                  placeholder="http://10.102.214.176"
+                  aria-label="ESP32-S3 gateway address"
                   className="w-full rounded-xl border border-slate-700 bg-black/40 px-3 py-2 text-xs font-mono text-slate-200 outline-none focus:border-cyan-400"
                 />
                 <input
                   value={esp32ApiKey}
                   onChange={(event) => setEsp32ApiKey(event.target.value)}
-                  placeholder="ESP32 API key"
+                  placeholder="ESP32-S3 API key"
                   type="password"
                   aria-label="ESP32 API key"
                   className="w-full rounded-xl border border-slate-700 bg-black/40 px-3 py-2 text-xs font-mono text-slate-200 outline-none focus:border-cyan-400"
