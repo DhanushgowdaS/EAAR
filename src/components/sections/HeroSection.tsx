@@ -86,7 +86,7 @@ export const HeroSection: React.FC = () => {
                   </span>
                   <div className="text-2xl font-mono font-bold text-white tabular-nums">
                     Row {robotStatus.current_row}
-                    <span className="text-xs text-slate-500 ml-1 font-normal">/ {robotStatus.total_rows || 8}</span>
+                    <span className="text-xs text-slate-500 ml-1 font-normal">/ {totalRows}</span>
                   </div>
                 </div>
 
