@@ -37,7 +37,6 @@ const ControlButton: React.FC<{
     }}
     onPointerUp={onPressEnd}
     onPointerCancel={onPressEnd}
-    onPointerLeave={onPressEnd}
     className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-[#09180f] border border-emerald-800/70 text-emerald-300 hover:bg-emerald-950 hover:border-emerald-500 active:bg-emerald-800/60 active:text-white transition-all duration-100 flex items-center justify-center shadow-lg touch-none select-none"
   >
     {children}
@@ -141,7 +140,6 @@ const JoystickController: React.FC = () => {
         }}
         onPointerUp={stop}
         onPointerCancel={stop}
-        onPointerLeave={() => dragging.current && stop()}
       >
         <div className="absolute inset-10 rounded-full border border-emerald-900/60" />
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-emerald-950 border border-emerald-500/60 shadow-[0_0_30px_rgba(16,185,129,0.18)] flex items-center justify-center transition-transform duration-75" style={{ transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))` }}>
