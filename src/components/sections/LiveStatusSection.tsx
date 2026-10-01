@@ -19,11 +19,11 @@ import {
 } from 'lucide-react';
 
 export const LiveStatusSection: React.FC = () => {
-  const { robotStatus, injectRobotStatus, t } = useRover();
+  const { robotStatus, injectRobotStatus, totalRows, t } = useRover();
 
   const handleNextStep = () => {
     const nextStep = (robotStatus.current_step + 1) % (robotStatus.total_steps || 120);
-    const nextRow = nextStep === 0 ? ((robotStatus.current_row % (robotStatus.total_rows || 8)) + 1) : robotStatus.current_row;
+    const nextRow = nextStep === 0 ? ((robotStatus.current_row % totalRows) + 1) : robotStatus.current_row;
     injectRobotStatus({
       current_step: nextStep,
       current_row: nextRow,
@@ -174,7 +174,7 @@ export const LiveStatusSection: React.FC = () => {
                 Visual Navigation Progress
               </span>
               <h4 className="text-xl font-heading font-bold text-white mt-0.5">
-                {t('crop_field_map')} (8 Rows × 15 Checkpoints)
+                {t('crop_field_map')} ({totalRows} Rows × 15 Checkpoints)
               </h4>
             </div>
 
@@ -197,7 +197,7 @@ export const LiveStatusSection: React.FC = () => {
 
           {/* Interactive Agricultural Rows Grid Canvas */}
           <div className="space-y-3 overflow-x-auto pb-2">
-            {[...Array(8)].map((_, rIdx) => {
+            {[...Array(totalRows)].map((_, rIdx) => {
               const rowNum = rIdx + 1;
               const isCurrentRow = robotStatus.current_row === rowNum;
               return (
