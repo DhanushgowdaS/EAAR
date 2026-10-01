@@ -82,8 +82,8 @@ unsigned long lastDjStep = 0;
 // the computer/phone running the EAAR website. The website sends
 // navigation commands directly to this ESP32 over HTTP.
 
-#define WIFI_SSID     "YOUR_WIFI_SSID"
-#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#define WIFI_SSID     "Admin"
+#define WIFI_PASSWORD "password"
 #define API_KEY       "eaar-navigation-esp32-api-key-v1"
 
 WebServer server(80);
