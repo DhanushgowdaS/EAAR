@@ -98,6 +98,7 @@ bool isNavigationCommand(char command) {
 
 uint8_t forwardBackwardSpeed = DEFAULT_SPEED;
 uint8_t leftRightSpeed = DEFAULT_TURN_SPEED;
+uint8_t ledBrightness = 200;
 
 bool isLightingCommand(char command) {
   return command == '1' || command == '2' ||
@@ -145,6 +146,43 @@ void handleLightingCommand(char command) {
       Serial.println("LIGHTING: DJ");
       break;
   }
+}
+
+void handleBrightness() {
+  sendCorsHeaders();
+
+  String key = server.hasArg("key") ? server.arg("key") : "";
+  if (key != API_KEY) {
+    server.send(401, "application/json", "{\"ok\":false,\"error\":\"unauthorized\"}");
+    return;
+  }
+
+  if (!server.hasArg("level")) {
+    String response = "{\"ok\":true,\"brightness\":";
+    response += ledBrightness;
+    response += "}";
+    server.send(200, "application/json", response);
+    return;
+  }
+
+  int value = server.arg("level").toInt();
+  if (value < 0 || value > 255) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"brightness must be 0-255\"}");
+    return;
+  }
+
+  ledBrightness = (uint8_t)value;
+  prefs.putUChar("ledBright", ledBrightness);
+  strip.setBrightness(ledBrightness);
+  strip.show();
+
+  Serial.print("LED BRIGHTNESS: ");
+  Serial.println(ledBrightness);
+
+  String response = "{\"ok\":true,\"brightness\":";
+  response += ledBrightness;
+  response += "}";
+  server.send(200, "application/json", response);
 }
 
 void handleSpeed() {
@@ -320,8 +358,10 @@ void startWiFiServer() {
   server.on("/command", HTTP_OPTIONS, handleOptions);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/speed", HTTP_GET, handleSpeed);
+  server.on("/brightness", HTTP_GET, handleBrightness);
   server.on("/status", HTTP_OPTIONS, handleOptions);
   server.on("/speed", HTTP_OPTIONS, handleOptions);
+  server.on("/brightness", HTTP_OPTIONS, handleOptions);
 
   server.on("/", HTTP_GET, []() {
     sendCorsHeaders();
@@ -378,10 +418,10 @@ void setup() {
 
   strip.begin();
   // Keep NeoPixels at a moderate brightness to reduce 5V current draw.
-  strip.setBrightness(64);
-  strip.show();
-
   prefs.begin("agribot", false);
+  ledBrightness = prefs.getUChar("ledBright", 200);
+  strip.setBrightness(ledBrightness);
+  strip.show();
   forwardBackwardSpeed = prefs.getUChar("fbSpeed", DEFAULT_SPEED);
   leftRightSpeed = prefs.getUChar("lrSpeed", DEFAULT_TURN_SPEED);
 
