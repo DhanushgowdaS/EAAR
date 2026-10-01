@@ -1169,6 +1169,11 @@ void startAutomatic() {
       stopMotor();
     }
 
+    // Direction functions set the H-bridge pins, while applyDrive()
+    // supplies the PWM speed. Apply it before waiting for the
+    // recorded duration so the rover actually moves automatically.
+    applyDrive();
+
     delay(duration);
 
     stopMotor();
