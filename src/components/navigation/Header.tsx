@@ -20,73 +20,75 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  const sectionNames: Record<string, string> = {
-    home: 'Home',
-    architecture: 'Architecture',
-    results: 'Results & Environmental Conditions',
-    devices: 'Devices & Hardware',
-    'live-status': 'Live Status & Navigation',
-    'navigation-controller': 'Navigation Controller',
-  };
-
-  const searchTargets = [
-    { label: 'Home', keywords: ['home', 'overview', 'hero'] },
-    { label: 'Architecture', keywords: ['architecture', 'hardware', 'edge computing', 'esp32', 'raspberry pi', 'esp32-s3', 'hc-05', 'camera', 'supabase'] },
-    { label: 'Results', keywords: ['results', 'environment', 'temperature', 'humidity', 'soil moisture', 'moisture', 'disease', 'spraying', 'telemetry', 'ai'] },
-    { label: 'Devices', keywords: ['devices', 'device fleet', 'hardware', 'module', 'online', 'offline', 'diagnostic'] },
-    { label: 'Live Status', keywords: ['live status', 'navigation mode', 'current row', 'heading', 'obstacle', 'lidar', 'waypoint'] },
-    { label: 'Navigation Controller', keywords: ['navigation controller', 'arrow controller', 'joystick', 'training mode', 'automatic mode', 'manual mode', 'store to flash', 'end training', 'forward', 'backward', 'left', 'right', 'stop'] },
-  ];
-
   const goToSearchResult = (query: string) => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return;
 
-    const target = searchTargets.find((item) =>
-      item.label.toLowerCase() === normalized ||
-      item.keywords.some((keyword) => keyword === normalized)
-    );
+    const tokens = normalized.split(/\\s+/).filter(Boolean);
+    const sections = Array.from(document.querySelectorAll('main section')) as HTMLElement[];
 
-    const scrollToMatch = () => {
-      const sections = Array.from(document.querySelectorAll('main section')) as HTMLElement[];
-      const tokens = normalized.split(/\\s+/).filter(Boolean);
+    let best: { element: HTMLElement; score: number; section: HTMLElement } | null = null;
 
-      let best: { element: HTMLElement; score: number } | null = null;
-      for (const section of sections) {
-        const text = (section.innerText || '').toLowerCase();
-        if (!text) continue;
+    for (const section of sections) {
+      const sectionText = (section.innerText || '').toLowerCase();
+      if (!sectionText) continue;
 
-        const phraseScore = text.includes(normalized) ? 100 : 0;
-        const tokenScore = tokens.reduce((score, token) => score + (text.includes(token) ? 10 : 0), 0);
-        const score = phraseScore + tokenScore;
+      const phraseScore = sectionText.includes(normalized) ? 100 : 0;
+      const tokenScore = tokens.reduce(
+        (score, token) => score + (sectionText.includes(token) ? 12 : 0),
+        0
+      );
 
-        if (score > 0 && (!best || score > best.score)) {
-          best = { element: section, score };
+      if (phraseScore + tokenScore === 0) continue;
+
+      // Find the most specific visible content block containing the search text.
+      const candidates = Array.from(
+        section.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,button,div')
+      ) as HTMLElement[];
+
+      for (const element of candidates) {
+        const text = (element.innerText || '').trim().toLowerCase();
+        if (!text || text.length > 700) continue;
+
+        const exact = text.includes(normalized) ? 80 : 0;
+        const words = tokens.reduce((score, token) => score + (text.includes(token) ? 8 : 0), 0);
+        if (exact + words === 0) continue;
+
+        // Prefer a meaningful card/container around the matched text rather than
+        // jumping to a tiny label such as an individual word.
+        const card =
+          element.closest('[class*="rounded-2xl"]') ||
+          element.closest('[class*="rounded-xl"]') ||
+          element;
+
+        const cardElement = card as HTMLElement;
+        const cardText = (cardElement.innerText || '').trim();
+        const sizeBonus = cardText.length >= 40 && cardText.length <= 900 ? 15 : 0;
+        const score = phraseScore + tokenScore + exact + words + sizeBonus;
+
+        if (!best || score > best.score) {
+          best = { element: cardElement, score, section };
         }
       }
-
-      if (best) {
-        best.element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    };
+    }
 
     setIsSearchFocused(false);
     setSearchQuery('');
 
-    if (target) {
-      const id = target.label === 'Navigation Controller'
-        ? 'navigation-controller'
-        : target.label === 'Live Status'
-          ? 'live-status'
-          : target.label.toLowerCase();
-      setActiveSection(id);
-      window.setTimeout(scrollToMatch, 80);
+    if (best) {
+      best.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
+    // If no exact content is found, keep the user at Home rather than
+    // pretending that an unrelated section matched.
     setActiveSection('home');
-    window.setTimeout(scrollToMatch, 80);
+    window.setTimeout(() => {
+      const home = document.querySelector('main section');
+      home?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
   };
+
 
   const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
@@ -183,28 +185,19 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
 
           {isSearchFocused && searchQuery.trim() && (
             <div className="absolute top-full right-0 mt-2 w-72 rounded-xl bg-[#07120a] border border-emerald-900/70 shadow-2xl overflow-hidden z-50">
-              <div className="px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-slate-500 border-b border-emerald-950">
-                Press Enter to jump
-              </div>
-              {searchTargets
-                .filter((item) => {
-                  const q = searchQuery.toLowerCase().trim();
-                  return item.label.toLowerCase().includes(q) || item.keywords.some((keyword) => keyword.includes(q));
-                })
-                .slice(0, 6)
-                .map((item) => (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => goToSearchResult(item.label)}
-                    className="w-full text-left px-3 py-2.5 text-xs font-mono text-slate-300 hover:bg-emerald-950/60 hover:text-emerald-300 transition-colors"
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => goToSearchResult(searchQuery)}
+                className="w-full text-left px-3 py-3 text-xs font-mono text-emerald-300 hover:bg-emerald-950/60 transition-colors"
+              >
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                  Search entire page
+                </span>
+                Jump to “{searchQuery.trim()}”
+              </button>
               <div className="px-3 py-2 text-[10px] font-mono text-slate-600 border-t border-emerald-950">
-                Searches page content too
+                Searches every visible word and content block
               </div>
             </div>
           )}
