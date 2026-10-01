@@ -42,6 +42,8 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
     isSupabaseLive,
     totalRows,
     setTotalRows,
+    checkpointsPerRow,
+    setCheckpointsPerRow,
   } = useRover();
 
   if (!isOpen) return null;
@@ -233,7 +235,23 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                   />
                   <span className="text-[11px] text-slate-500 font-mono">rows</span>
                 </div>
-                <p className="text-[10px] text-slate-500 font-mono">Saved locally for this field.</p>
+                <label className="text-xs text-slate-300 font-mono block" htmlFor="eaar-checkpoints-per-row">
+                  Checkpoints Per Row
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="eaar-checkpoints-per-row"
+                    type="number"
+                    min="1"
+                    max="100"
+                    step="1"
+                    value={checkpointsPerRow}
+                    onChange={(e) => setCheckpointsPerRow(Number(e.target.value))}
+                    className="w-24 px-3 py-2 rounded-lg bg-[#050e07] border border-emerald-900 text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-[11px] text-slate-500 font-mono">checkpoints</span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-mono">Rows and checkpoints are saved locally for this field.</p>
               </div>
             </div>
 
