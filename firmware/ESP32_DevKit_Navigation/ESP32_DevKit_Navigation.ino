@@ -148,6 +148,40 @@ void handleLightingCommand(char command) {
   }
 }
 
+void handleLighting() {
+  sendCorsHeaders();
+
+  String key = server.hasArg("key") ? server.arg("key") : "";
+  String cmd = server.hasArg("cmd") ? server.arg("cmd") : "";
+
+  if (key != API_KEY) {
+    server.send(401, "application/json",
+                "{\"ok\":false,\"error\":\"unauthorized\"}");
+    return;
+  }
+
+  if (cmd.length() != 1) {
+    server.send(400, "application/json",
+                "{\"ok\":false,\"error\":\"invalid lighting command\"}");
+    return;
+  }
+
+  char command = cmd[0];
+
+  if (!isLightingCommand(command) && command != 'x') {
+    server.send(400, "application/json",
+                "{\"ok\":false,\"error\":\"invalid lighting command\"}");
+    return;
+  }
+
+  // Re-apply the current brightness before changing the LED color/effect.
+  strip.setBrightness(ledBrightness);
+  handleLightingCommand(command);
+
+  server.send(200, "application/json",
+              "{\"ok\":true,\"command\":\"" + String(command) + "\",\"type\":\"lighting\",\"device\":\"EAAR-ESP32-DEVKIT\"}");
+}
+
 void handleBrightness() {
   sendCorsHeaders();
 
@@ -355,13 +389,16 @@ void startWiFiServer() {
   Serial.println("mDNS name: http://eaar-devkit.local");
 
   server.on("/command", HTTP_GET, handleCommand);
+  server.on("/lighting", HTTP_GET, handleLighting);
   server.on("/command", HTTP_OPTIONS, handleOptions);
+  server.on("/lighting", HTTP_OPTIONS, handleOptions);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/speed", HTTP_GET, handleSpeed);
   server.on("/brightness", HTTP_GET, handleBrightness);
   server.on("/status", HTTP_OPTIONS, handleOptions);
   server.on("/speed", HTTP_OPTIONS, handleOptions);
   server.on("/brightness", HTTP_OPTIONS, handleOptions);
+  server.on("/lighting", HTTP_OPTIONS, handleOptions);
 
   server.on("/", HTTP_GET, []() {
     sendCorsHeaders();
@@ -379,6 +416,7 @@ void startWiFiServer() {
 
   Serial.println("HTTP SERVER: STARTED");
   Serial.println("ENDPOINT: /command?cmd=F&key=...");
+  Serial.println("ENDPOINT: /lighting?cmd=1&key=...");
   Serial.println("ENDPOINT: /status");
   Serial.println("================================");
 }
