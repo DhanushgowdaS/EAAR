@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CircleStop, Gamepad2, Navigation2,
-  Play, Radio, RotateCcw, Save, Settings, Square, TimerReset, Zap,
+  Play, Radio, RotateCcw, Save, Settings, Square, TimerReset, Zap, Wifi, Link2,
 } from 'lucide-react';
 
 type ControllerMode = 'arrow' | 'joystick';
@@ -16,6 +16,9 @@ type LayoutPosition = { x: number; y: number; w: number; h: number };
 type LayoutMap = Record<LayoutKey, LayoutPosition>;
 
 const STORAGE_KEY = 'eaar-navigation-controller-layout-v1';
+const ESP32_URL_KEY = 'eaar-navigation-esp32-url-v1';
+const ESP32_API_KEY = 'eaar-navigation-esp32-api-key-v1';
+const ESP32_HEARTBEAT_MS = 300;
 
 const DEFAULT_LAYOUT: LayoutMap = {
   manual: { x: 12, y: 12, w: 11, h: 8 },
@@ -150,29 +153,121 @@ export const NavigationControllerSection: React.FC = () => {
   const [layout, setLayout] = useState<LayoutMap>(DEFAULT_LAYOUT);
   const [draftLayout, setDraftLayout] = useState<LayoutMap>(DEFAULT_LAYOUT);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [esp32Url, setEsp32Url] = useState('');
+  const [esp32ApiKey, setEsp32ApiKey] = useState('');
+  const [esp32Status, setEsp32Status] = useState<'not-configured' | 'online' | 'offline'>('not-configured');
+  const [esp32Message, setEsp32Message] = useState('ESP32 DevKit not configured');
+  const commandHeartbeatRef = useRef<number | null>(null);
   const dragRef = useRef<{ key: LayoutKey; dx: number; dy: number } | null>(null);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setLayout({ ...DEFAULT_LAYOUT, ...JSON.parse(saved) });
+      setEsp32Url(localStorage.getItem(ESP32_URL_KEY) || '');
+      setEsp32ApiKey(localStorage.getItem(ESP32_API_KEY) || '');
     } catch {}
     emitCommand('S');
     emitMode('manual');
+
+    return () => {
+      if (commandHeartbeatRef.current) window.clearInterval(commandHeartbeatRef.current);
+      commandHeartbeatRef.current = null;
+    };
   }, []);
 
-  const stop = () => { setActiveCommand('S'); emitCommand('S'); };
-  const sendCommand = (command: NavigationCommand) => { setActiveCommand(command); emitCommand(command); };
+  const normalizedEsp32Url = () => esp32Url.trim().replace(/\\/+$/, '');
+
+  const sendToEsp32 = async (command: NavigationCommand) => {
+    const baseUrl = normalizedEsp32Url();
+    const key = esp32ApiKey.trim();
+    if (!baseUrl || !key) return false;
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 900);
+    try {
+      const url = `${baseUrl}/command?cmd=${encodeURIComponent(command)}&key=${encodeURIComponent(key)}`;
+      const request = new Request(url, {
+        method: 'GET',
+        mode: 'cors',
+        signal: controller.signal,
+        targetAddressSpace: 'local',
+      } as RequestInit & { targetAddressSpace: 'local' });
+      const response = await fetch(request);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setEsp32Status('online');
+      setEsp32Message(`ESP32 DevKit received ${command}`);
+      return true;
+    } catch {
+      setEsp32Status('offline');
+      setEsp32Message('ESP32 DevKit unreachable');
+      return false;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+
+  const startCommandHeartbeat = (command: NavigationCommand) => {
+    if (commandHeartbeatRef.current) window.clearInterval(commandHeartbeatRef.current);
+    if (command === 'S') return;
+    commandHeartbeatRef.current = window.setInterval(() => {
+      void sendToEsp32(command);
+    }, ESP32_HEARTBEAT_MS);
+  };
+
+  const stop = () => {
+    if (commandHeartbeatRef.current) window.clearInterval(commandHeartbeatRef.current);
+    commandHeartbeatRef.current = null;
+    setActiveCommand('S');
+    emitCommand('S');
+    void sendToEsp32('S');
+  };
+
+  const sendCommand = (command: NavigationCommand) => {
+    setActiveCommand(command);
+    emitCommand(command);
+    void sendToEsp32(command);
+    startCommandHeartbeat(command);
+  };
 
   const changeRoverMode = (nextMode: RoverMode) => {
     stop();
     setRoverMode(nextMode);
-    if (nextMode === 'training') { setTrainingEnded(false); setFlashRequested(false); }
+    if (nextMode === 'training') {
+      setTrainingEnded(false);
+      setFlashRequested(false);
+      void sendToEsp32('T');
+    } else if (nextMode === 'auto') {
+      void sendToEsp32('A');
+    } else {
+      void sendToEsp32('S');
+    }
     emitMode(nextMode);
   };
 
-  const endTraining = () => { stop(); setTrainingEnded(true); emitAction('end-training'); };
-  const storeToFlash = () => { stop(); setFlashRequested(true); emitAction('store-to-flash'); };
+  const endTraining = () => {
+    stop();
+    setTrainingEnded(true);
+    emitAction('end-training');
+  };
+
+  const storeToFlash = () => {
+    stop();
+    setFlashRequested(true);
+    emitAction('store-to-flash');
+    void sendToEsp32('M');
+  };
+
+  const saveEsp32Connection = () => {
+    const url = normalizedEsp32Url();
+    setEsp32Url(url);
+    localStorage.setItem(ESP32_URL_KEY, url);
+    localStorage.setItem(ESP32_API_KEY, esp32ApiKey.trim());
+    setEsp32Message('Connection settings saved');
+    setEsp32Status(url && esp32ApiKey.trim() ? 'offline' : 'not-configured');
+  };
+
+  const testEsp32Connection = () => { void sendToEsp32('S'); };
 
   const openSettings = () => { setDraftLayout(layout); setSettingsOpen(true); };
   const saveSettings = () => {
@@ -252,6 +347,41 @@ export const NavigationControllerSection: React.FC = () => {
             className="self-start sm:self-auto flex items-center gap-2 rounded-full border border-emerald-500/50 bg-emerald-500/10 px-5 py-2.5 text-emerald-200 font-mono text-xs tracking-wider hover:bg-emerald-500/20 hover:border-emerald-300 transition-all">
             <Settings className="w-4 h-4" /> CONTROLLER SETTINGS
           </button>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+          <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 text-[10px] font-mono tracking-widest text-cyan-300 uppercase mb-2">
+                <Wifi className="w-3.5 h-3.5" /> ESP32 DEVKIT LINK
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <input
+                  value={esp32Url}
+                  onChange={(event) => setEsp32Url(event.target.value)}
+                  placeholder="http://192.168.1.50"
+                  aria-label="ESP32 DevKit address"
+                  className="w-full rounded-xl border border-slate-700 bg-black/40 px-3 py-2 text-xs font-mono text-slate-200 outline-none focus:border-cyan-400"
+                />
+                <input
+                  value={esp32ApiKey}
+                  onChange={(event) => setEsp32ApiKey(event.target.value)}
+                  placeholder="ESP32 API key"
+                  type="password"
+                  aria-label="ESP32 API key"
+                  className="w-full rounded-xl border border-slate-700 bg-black/40 px-3 py-2 text-xs font-mono text-slate-200 outline-none focus:border-cyan-400"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button type="button" onClick={saveEsp32Connection} className="rounded-xl border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-[10px] font-mono tracking-wider text-cyan-200 hover:bg-cyan-500/20">SAVE LINK</button>
+              <button type="button" onClick={testEsp32Connection} disabled={!esp32Url.trim() || !esp32ApiKey.trim()} className="flex items-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-[10px] font-mono tracking-wider text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40"><Link2 className="w-3.5 h-3.5" /> TEST</button>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-[10px] font-mono text-slate-500">
+            <span className={'inline-block w-2 h-2 rounded-full ' + (esp32Status === 'online' ? 'bg-emerald-400' : esp32Status === 'offline' ? 'bg-rose-400' : 'bg-slate-600')} />
+            {esp32Message} · HOLD = continuous command · RELEASE = S
+          </div>
         </div>
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
