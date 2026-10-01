@@ -163,7 +163,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
         </div>
 
         {/* Zone 2: Navigation Links (Clean text links with hover state) */}
-        <nav className={`hidden md:flex items-center gap-1 lg:gap-2 transition-all duration-200 ${isSearchOpen ? 'pr-[min(54vw,225px)]' : ''}`}>
+        <nav className={`hidden md:flex items-center gap-1 lg:gap-2 transition-transform duration-200 ${isSearchOpen ? '-translate-x-[170px]' : 'translate-x-0'}`}>
           {navItems.map((item) => {
             const isActive = activeSection === item.id;
             return (
@@ -198,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
           </button>
 
           {isSearchOpen && (
-            <div className="absolute top-1/2 right-0 -translate-y-1/2 flex items-center z-[60] w-[min(54vw,225px)] rounded-lg bg-[#09150d] border border-emerald-500/70 shadow-2xl shadow-black/40 animate-in slide-in-from-right-3 duration-200">
+            <div className="absolute top-1/2 right-0 -translate-y-1/2 flex items-center z-[60] w-[min(48vw,170px)] rounded-lg bg-[#09150d] border border-emerald-500/70 shadow-2xl shadow-black/40 animate-in slide-in-from-right-3 duration-200">
               <Search className="w-4 h-4 ml-3 text-emerald-400 shrink-0" />
               <input
                 autoFocus
