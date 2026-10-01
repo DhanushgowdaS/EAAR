@@ -2,12 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CircleStop, Gamepad2, Navigation2,
   Play, Radio, RotateCcw, Save, Settings, Square, Trash2, TimerReset, Zap, Wifi, Link2,
+  Lightbulb, Sparkles, Sun, Moon, AlertTriangle, Leaf, Activity, Palette, Power,
 } from 'lucide-react';
 
 type ControllerMode = 'arrow' | 'joystick';
 type RoverMode = 'manual' | 'training' | 'auto';
 type NavigationCommand = 'F' | 'B' | 'L' | 'R' | 'S';
-type DevKitCommand = NavigationCommand | 'T' | 'E' | 'M' | 'A' | 'D';
+type LightingCommand = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0' | 'X';
+type DevKitCommand = NavigationCommand | 'T' | 'E' | 'M' | 'A' | 'D' | LightingCommand;
 type LayoutKey =
   | 'manual' | 'training' | 'auto'
   | 'forward' | 'back' | 'left' | 'right' | 'stop'
@@ -157,6 +159,7 @@ export const NavigationControllerSection: React.FC = () => {
   const [layout, setLayout] = useState<LayoutMap>(DEFAULT_LAYOUT);
   const [draftLayout, setDraftLayout] = useState<LayoutMap>(DEFAULT_LAYOUT);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [lightingOpen, setLightingOpen] = useState(false);
   const [esp32Url, setEsp32Url] = useState(DEVKIT_DEFAULT);
   const [esp32ApiKey, setEsp32ApiKey] = useState('');
   const [esp32Status, setEsp32Status] = useState<'not-configured' | 'online' | 'offline'>('not-configured');
@@ -367,6 +370,10 @@ export const NavigationControllerSection: React.FC = () => {
 
   const testEsp32Connection = () => { void sendToEsp32('S'); };
 
+  const sendLighting = (command: LightingCommand) => {
+    void sendToEsp32(command);
+  };
+
   const openSettings = () => { setDraftLayout(layout); setSettingsOpen(true); };
   const saveSettings = () => {
     setLayout(draftLayout);
@@ -557,17 +564,48 @@ export const NavigationControllerSection: React.FC = () => {
         </div>
 
         {settingsOpen && (
-          <div className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="text-xs font-mono text-emerald-200">
-              <span className="font-bold">LAYOUT EDIT MODE:</span> drag any control to the position you want. The saved layout stays on this browser.
+          <div className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="text-xs font-mono text-emerald-200">
+                <span className="font-bold">LAYOUT EDIT MODE:</span> drag any control to the position you want. The saved layout stays on this browser.
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button type="button" onClick={resetSettings} className="flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-xs font-mono text-slate-300 hover:border-slate-400">
+                  <RotateCcw className="w-3.5 h-3.5" /> RESET
+                </button>
+                <button type="button" onClick={saveSettings} className="flex items-center gap-2 rounded-full border border-emerald-400 bg-emerald-500/15 px-4 py-2 text-xs font-mono text-emerald-200 hover:bg-emerald-500/25">
+                  <Save className="w-3.5 h-3.5" /> SAVE SETTINGS
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <button type="button" onClick={resetSettings} className="flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-xs font-mono text-slate-300 hover:border-slate-400">
-                <RotateCcw className="w-3.5 h-3.5" /> RESET
+
+            <div className="border-t border-emerald-500/20 pt-3">
+              <button type="button" onClick={() => setLightingOpen(v => !v)}
+                className="flex items-center gap-2 rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-2.5 text-xs font-mono tracking-wider text-amber-200 hover:bg-amber-400/20 transition-all">
+                <Lightbulb className="w-4 h-4" /> LIGHTING
+                <span className="ml-1 text-[9px] text-slate-500">{lightingOpen ? '▲' : '▼'}</span>
               </button>
-              <button type="button" onClick={saveSettings} className="flex items-center gap-2 rounded-full border border-emerald-400 bg-emerald-500/15 px-4 py-2 text-xs font-mono text-emerald-200 hover:bg-emerald-500/25">
-                <Save className="w-3.5 h-3.5" /> SAVE SETTINGS
-              </button>
+
+              {lightingOpen && (
+                <div className="mt-3 rounded-2xl border border-slate-700 bg-black/30 p-3">
+                  <div className="mb-3 flex items-center gap-2 text-[10px] font-mono tracking-widest text-amber-300 uppercase">
+                    <Palette className="w-3.5 h-3.5" /> Rover lighting & situations
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button type="button" onClick={() => sendLighting('1')} className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-3 text-left text-xs font-mono text-rose-200"><AlertTriangle className="w-4 h-4 mb-1" />ALERT<br /><span className="text-[9px] text-slate-500">RED</span></button>
+                    <button type="button" onClick={() => sendLighting('2')} className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-3 text-left text-xs font-mono text-emerald-200"><Leaf className="w-4 h-4 mb-1" />READY<br /><span className="text-[9px] text-slate-500">GREEN</span></button>
+                    <button type="button" onClick={() => sendLighting('3')} className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-3 py-3 text-left text-xs font-mono text-blue-200"><Activity className="w-4 h-4 mb-1" />ACTIVE<br /><span className="text-[9px] text-slate-500">BLUE</span></button>
+                    <button type="button" onClick={() => sendLighting('4')} className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-3 py-3 text-left text-xs font-mono text-yellow-200"><Radio className="w-4 h-4 mb-1" />TRAINING<br /><span className="text-[9px] text-slate-500">YELLOW</span></button>
+                    <button type="button" onClick={() => sendLighting('5')} className="rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-3 text-left text-xs font-mono text-orange-200"><Moon className="w-4 h-4 mb-1" />NIGHT<br /><span className="text-[9px] text-slate-500">WARM</span></button>
+                    <button type="button" onClick={() => sendLighting('6')} className="rounded-xl border border-red-900/60 bg-red-950/20 px-3 py-3 text-left text-xs font-mono text-red-200"><Sun className="w-4 h-4 mb-1" />HARVEST<br /><span className="text-[9px] text-slate-500">MAROON</span></button>
+                    <button type="button" onClick={() => sendLighting('7')} className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-3 text-left text-xs font-mono text-cyan-200"><Sparkles className="w-4 h-4 mb-1" />SCAN<br /><span className="text-[9px] text-slate-500">PEACOCK</span></button>
+                    <button type="button" onClick={() => sendLighting('8')} className="rounded-xl border border-slate-600 bg-slate-900/50 px-3 py-3 text-left text-xs font-mono text-slate-200"><Power className="w-4 h-4 mb-1" />LIGHTS OFF</button>
+                    <button type="button" onClick={() => sendLighting('9')} className="rounded-xl border border-purple-500/40 bg-purple-500/10 px-3 py-3 text-left text-xs font-mono text-purple-200"><Sparkles className="w-4 h-4 mb-1" />SNAKE<br /><span className="text-[9px] text-slate-500">MOVEMENT EFFECT</span></button>
+                    <button type="button" onClick={() => sendLighting('0')} className="rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-3 text-left text-xs font-mono text-indigo-200"><Sparkles className="w-4 h-4 mb-1" />FADE<br /><span className="text-[9px] text-slate-500">COLOR CYCLE</span></button>
+                    <button type="button" onClick={() => sendLighting('X')} className="rounded-xl border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-3 text-left text-xs font-mono text-fuchsia-200"><Sparkles className="w-4 h-4 mb-1" />DJ<br /><span className="text-[9px] text-slate-500">RAINBOW</span></button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
