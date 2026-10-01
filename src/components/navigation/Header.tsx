@@ -38,85 +38,51 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
     return prev[b.length];
   };
 
+  const searchTargets = [
+    { keywords: ['home'], section: 'home', label: 'Home' },
+    { keywords: ['about', 'ar', 'computer module', 'supported regions'], section: 'about', label: 'About — AR Computer Module / Supported Regions' },
+    { keywords: ['temperature', 'humidity', 'moisture', 'environmental condition'], section: 'results', label: 'Field Inspection — Environmental Conditions' },
+    { keywords: ['solution', 'recommendation', 'disease', 'problem'], section: 'results', label: 'Disease and Recommendation Solution' },
+    { keywords: ['device', 'devices', 'hardware', 'esp32', 'esp32 devkit'], section: 'devices', label: 'Devices — ESP32 / Hardware' },
+    { keywords: ['navigation', 'autonomous navigation'], section: 'results', label: 'Autonomous Navigation' },
+    { keywords: ['ros', 'checkpoints', 'visual navigation progress'], section: 'results', label: 'Visual Navigation Progress — ROS / Checkpoints' },
+    { keywords: ['controller', 'remote', 'joystick'], section: 'live-status', label: 'Navigation Controller — Remote / Joystick' },
+  ];
+
   const getSearchMatches = (query: string) => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return [];
 
-    const tokens = normalized.split(/\s+/).filter(Boolean);
-    const sections = Array.from(document.querySelectorAll('main section')) as HTMLElement[];
-    const matches: Array<{ element: HTMLElement; score: number; label: string }> = [];
+    const exact = searchTargets.filter((target) =>
+      target.keywords.some((keyword) => keyword === normalized || keyword.startsWith(normalized))
+    );
+    const partial = searchTargets.filter((target) =>
+      !exact.includes(target) && target.keywords.some((keyword) => keyword.includes(normalized))
+    );
+    const targets = [...exact, ...partial].slice(0, 8);
 
-    sections.forEach((section) => {
-      const candidates = Array.from(
-        section.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,li,button,[role="status"],[class*="rounded-xl"],[class*="rounded-2xl"]')
-      ) as HTMLElement[];
-
-      candidates.forEach((element) => {
-        if (element.closest('header')) return;
-
-        const text = (element.innerText || '').replace(/\s+/g, ' ').trim();
-        const lower = text.toLowerCase();
-        if (!text || text.length > 900) return;
-
-        const phrase = lower.includes(normalized);
-        const tokenHits = tokens.filter((token) => lower.includes(token)).length;
-
-        // Fuzzy-match individual words so small spelling mistakes still
-        // produce useful predictions and navigation targets.
-        const words = Array.from(new Set(
-          lower.match(/[a-z0-9][a-z0-9-]*/g) || []
-        ));
-        let fuzzyHits = 0;
-        let closestDistance = Infinity;
-
-        tokens.forEach((token) => {
-          if (lower.includes(token)) {
-            fuzzyHits++;
-            closestDistance = 0;
-            return;
-          }
-          const distance = words.reduce((best, word) => Math.min(best, levenshtein(token, word)), Infinity);
-          const allowed = token.length <= 3 ? 1 : token.length <= 6 ? 2 : 3;
-          if (distance <= allowed) {
-            fuzzyHits++;
-            closestDistance = Math.min(closestDistance, distance);
-          }
-        });
-
-        if (!phrase && tokenHits === 0 && fuzzyHits === 0) return;
-
-        const headingBoost = /^H[1-6]$/.test(element.tagName) ? 25 : 0;
-        const phraseBoost = phrase ? 100 : 0;
-        const tokenScore = tokenHits * 12;
-        const fuzzyScore = fuzzyHits * 9 - (closestDistance === Infinity ? 0 : closestDistance * 2);
-        const compactness = text.length <= 240 ? 18 : text.length <= 500 ? 10 : 3;
-        const score = phraseBoost + tokenScore + fuzzyScore + headingBoost + compactness;
-
-        matches.push({
-          element,
-          score,
-          label: text.length > 90 ? text.slice(0, 87) + '...' : text,
-        });
-      });
+    return targets.map((target) => {
+      const sections = Array.from(document.querySelectorAll('main section')) as HTMLElement[];
+      const section = sections.find((element) =>
+        element.id === target.section || element.dataset.section === target.section ||
+        element.innerText.toLowerCase().includes(target.keywords[0])
+      );
+      return { element: section || document.querySelector('main') as HTMLElement, label: target.label };
     });
-
-    return matches
-      .sort((a, b) => b.score - a.score || a.label.length - b.label.length)
-      .filter((match, index, list) =>
-        index === list.findIndex((item) => item.label.toLowerCase() === match.label.toLowerCase())
-      )
-      .slice(0, 8);
   };
 
   const goToSearchResult = (query: string) => {
-    const matches = getSearchMatches(query);
-    const best = matches[0];
-
-    if (best) {
-      best.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setSearchQuery('');
-      setIsSearchOpen(false);
+    const normalized = query.trim().toLowerCase();
+    const target = searchTargets.find((item) =>
+      item.keywords.includes(normalized) || item.keywords.some((keyword) => keyword === normalized)
+    );
+    if (target) setActiveSection(target.section);
+    const match = getSearchMatches(query)[0];
+    if (match?.element) {
+      setTimeout(() => match.element.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
     }
+    setSearchQuery('');
+    setIsSearchOpen(false);
   };
 
   const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
