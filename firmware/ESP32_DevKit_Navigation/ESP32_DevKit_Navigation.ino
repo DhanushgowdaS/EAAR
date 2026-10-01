@@ -1,5 +1,6 @@
 #include <WiFi.h>
-#include <WebServer.h>
+#include <esp_now.h>
+#include <esp_wifi.h>
 #include <Preferences.h>
 #include <Adafruit_NeoPixel.h>
 
@@ -26,367 +27,137 @@
 #define DJ_SPREAD (65536 / NUM_LEDS)
 
 // =====================================================
-// WIFI SETTINGS
+// ESP-NOW RECEIVER
 // =====================================================
 
-// Keep your existing Wi-Fi credentials here.
-// Do NOT publish the password to GitHub.
-const char* WIFI_SSID = "Admin";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+// The DevKit does NOT connect to Wi-Fi.
+// ESP-NOW only uses the ESP32 radio for the S3 -> DevKit link.
+#define ESPNOW_START_CHANNEL 1
+#define ESPNOW_END_CHANNEL   13
+#define ESPNOW_HOP_MS        250
 
-// HTTP server used by the EAAR website.
-WebServer server(80);
+const uint8_t DEVKIT_MAC[6] = {0x6C, 0xC8, 0x40, 0x56, 0xC6, 0x78};
 
-// Persistent API key stored in ESP32 Preferences.
-String apiKey = "";
+volatile char espNowPendingCommand = 0;
+volatile bool espNowCommandPending = false;
 
-// Website command safety timeout.
-// The website repeatedly sends movement commands while a control is held.
-// If communication stops, the rover automatically stops.
-const unsigned long WEB_COMMAND_TIMEOUT_MS = 900;
-unsigned long lastWebCommandTime = 0;
-bool webCommandActive = false;
+bool espNowChannelLocked = false;
+uint8_t espNowChannel = ESPNOW_START_CHANNEL;
+unsigned long lastEspNowHop = 0;
 
-HardwareSerial HC05(2);
-HardwareSerial NanoSerial(1);
-Preferences prefs;
-Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
-
-struct RouteRecord {
-  char command;
-  unsigned long duration;
-};
-
-RouteRecord route[MAX_RECORDS];
-
-int routeCount = 0;
-
-char currentState = 'S';
-unsigned long stateStartTime = 0;
-
-bool recording = false;
-bool automaticMode = false;
-
-char lastCorrection = 'N';
-
-char cmdBuffer[16];
-int bufLen = 0;
-unsigned long lastCharTime = 0;
-const unsigned long GAP_MS = 60;
-
-int currentR = 255, currentG = 190, currentB = 20;
-
-bool snakeActive = false;
-bool snakeGrowing = true;
-int snakeStep = 0;
-unsigned long lastSnakeStep = 0;
-
-bool fadeActive = false;
-uint16_t fadeHue = 0;
-unsigned long lastFadeStep = 0;
-
-bool djActive = false;
-uint16_t djHue = 0;
-unsigned long lastDjStep = 0;
-
-// =====================================================
-// API KEY
-// =====================================================
-
-String generateApiKey() {
-
-  uint32_t a = esp_random();
-  uint32_t b = esp_random();
-  uint32_t c = esp_random();
-  uint32_t d = esp_random();
-
-  char key[33];
-
-  snprintf(
-    key,
-    sizeof(key),
-    "%08lX%08lX%08lX%08lX",
-    (unsigned long)a,
-    (unsigned long)b,
-    (unsigned long)c,
-    (unsigned long)d
-  );
-
-  return String(key);
+bool isNavigationCommand(char command) {
+  return command == 'F' || command == 'B' ||
+         command == 'L' || command == 'R' ||
+         command == 'S' || command == 'T' ||
+         command == 'M' || command == 'A' ||
+         command == 'D';
 }
 
-void loadOrCreateApiKey() {
+// ESP-NOW receive callback.
+// Keep this callback short; the actual motor command is handled in loop().
+void onEspNowReceive(const esp_now_recv_info_t *info,
+                     const uint8_t *data,
+                     int dataLen) {
 
-  apiKey = prefs.getString("api_key", "");
-
-  if (apiKey.length() == 0) {
-
-    apiKey = generateApiKey();
-
-    prefs.putString("api_key", apiKey);
-
-    Serial.println("NEW API KEY CREATED");
-  }
-  else {
-
-    Serial.println("EXISTING API KEY LOADED");
+  if (data == nullptr || dataLen < 1) {
+    return;
   }
 
-  Serial.print("API KEY: ");
-  Serial.println(apiKey);
+  char command = (char)data[0];
+
+  if (!isNavigationCommand(command)) {
+    return;
+  }
+
+  espNowPendingCommand = command;
+  espNowCommandPending = true;
+
+  // The first valid packet tells us the correct Wi-Fi/ESP-NOW channel.
+  espNowChannelLocked = true;
 }
 
-// =====================================================
-// WIFI
-// =====================================================
+void startEspNow() {
 
-void connectWiFi() {
-
-  // Reduce CPU power demand before starting the Wi-Fi radio.
-  // This gives the USB/regulator supply more headroom during
-  // the radio startup current surge.
+  // ESP-NOW requires the Wi-Fi radio, but the DevKit never connects
+  // to an access point. This avoids the old Wi-Fi client connection.
   setCpuFrequencyMhz(80);
 
-  Serial.println("WIFI: STARTING RADIO...");
-
   WiFi.mode(WIFI_STA);
-
-  // Keep Wi-Fi transmit power low after the radio is initialized.
   WiFi.setTxPower(WIFI_POWER_2dBm);
 
-  Serial.println("WIFI: RADIO INITIALIZED");
-  Serial.println("WIFI: STARTING CONNECTION...");
-
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  delay(100);
 
   Serial.println();
   Serial.println("================================");
-  Serial.println(" CONNECTING TO WIFI");
+  Serial.println(" ESP-NOW RECEIVER");
   Serial.println("================================");
-  Serial.print("SSID: ");
-  Serial.println(WIFI_SSID);
 
-  unsigned long start = millis();
+  Serial.print("DEVKIT MAC: ");
+  Serial.println(WiFi.macAddress());
 
-  while (WiFi.status() != WL_CONNECTED &&
-         millis() - start < 15000) {
-
-    delay(250);
-    Serial.print(".");
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW INIT: FAILED");
+    return;
   }
 
-  Serial.println();
-
-  if (WiFi.status() == WL_CONNECTED) {
-
-    Serial.println("WIFI: CONNECTED");
-    Serial.print("ESP32 IP: ");
-    Serial.println(WiFi.localIP());
-
-    Serial.print("ESP32 URL: http://");
-    Serial.println(WiFi.localIP());
+  if (esp_now_register_recv_cb(onEspNowReceive) != ESP_OK) {
+    Serial.println("ESP-NOW CALLBACK: FAILED");
+    return;
   }
-  else {
 
-    Serial.println("WIFI: CONNECTION FAILED");
-    Serial.println("Bluetooth/motor functions will still work.");
-  }
+  // We do not know the S3 Wi-Fi channel yet, so start at channel 1
+  // and hop through channels until the first valid command arrives.
+  espNowChannel = ESPNOW_START_CHANNEL;
+  esp_wifi_set_channel(espNowChannel, WIFI_SECOND_CHAN_NONE);
+
+  Serial.println("ESP-NOW INIT: OK");
+  Serial.println("CHANNEL SEARCH: 1-13");
+  Serial.println("WAITING FOR S3...");
 }
 
-void addCorsHeaders() {
+void updateEspNowChannelSearch() {
 
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  server.sendHeader("Access-Control-Allow-Headers", "*");
+  if (espNowChannelLocked) {
+    return;
+  }
+
+  if (millis() - lastEspNowHop < ESPNOW_HOP_MS) {
+    return;
+  }
+
+  lastEspNowHop = millis();
+
+  espNowChannel++;
+
+  if (espNowChannel > ESPNOW_END_CHANNEL) {
+    espNowChannel = ESPNOW_START_CHANNEL;
+  }
+
+  esp_wifi_set_channel(
+    espNowChannel,
+    WIFI_SECOND_CHAN_NONE
+  );
 }
 
-// =====================================================
-// WEB API
-// =====================================================
+void processEspNowCommand() {
 
-bool validApiKey() {
-
-  return server.hasArg("key") &&
-         server.arg("key") == apiKey;
-}
-
-void handleWebCommand() {
-
-  addCorsHeaders();
-
-  if (!validApiKey()) {
-
-    server.send(
-      401,
-      "text/plain",
-      "UNAUTHORIZED"
-    );
-
+  if (!espNowCommandPending) {
     return;
   }
 
-  if (!server.hasArg("cmd")) {
+  char command = espNowPendingCommand;
 
-    server.send(
-      400,
-      "text/plain",
-      "MISSING COMMAND"
-    );
+  espNowCommandPending = false;
 
-    return;
-  }
-
-  String value = server.arg("cmd");
-
-  if (value.length() != 1) {
-
-    server.send(
-      400,
-      "text/plain",
-      "INVALID COMMAND"
-    );
-
-    return;
-  }
-
-  char command = value.charAt(0);
-
-  if (command != 'F' &&
-      command != 'B' &&
-      command != 'L' &&
-      command != 'R' &&
-      command != 'S' &&
-      command != 'T' &&
-      command != 'M' &&
-      command != 'A' &&
-      command != 'D') {
-
-    server.send(
-      400,
-      "text/plain",
-      "UNSUPPORTED COMMAND"
-    );
-
-    return;
-  }
+  Serial.print("[ESP-NOW] RECEIVED: ");
+  Serial.println(command);
 
   handleMotorCommand(command);
-
-  if (command == 'F' ||
-      command == 'B' ||
-      command == 'L' ||
-      command == 'R') {
-
-    lastWebCommandTime = millis();
-    webCommandActive = true;
-  }
-  else if (command == 'S') {
-
-    webCommandActive = false;
-  }
-
-  server.send(
-    200,
-    "text/plain",
-    "OK"
-  );
 }
 
-void handleWebStatus() {
-
-  addCorsHeaders();
-
-  if (!validApiKey()) {
-
-    server.send(
-      401,
-      "text/plain",
-      "UNAUTHORIZED"
-    );
-
-    return;
-  }
-
-  String json = "{";
-  json += "\"status\":\"online\",";
-  json += "\"state\":\"";
-  json += currentState;
-  json += "\",";
-  json += "\"recording\":";
-  json += recording ? "true" : "false";
-  json += ",";
-  json += "\"automatic\":";
-  json += automaticMode ? "true" : "false";
-  json += ",";
-  json += "\"ip\":\"";
-  json += WiFi.localIP().toString();
-  json += "\"";
-  json += "}";
-
-  server.send(
-    200,
-    "application/json",
-    json
-  );
-}
-
-void handleOptions() {
-
-  addCorsHeaders();
-
-  server.send(
-    204,
-    "text/plain",
-    ""
-  );
-}
-
-void startWebServer() {
-
-  server.on(
-    "/",
-    HTTP_GET,
-    []() {
-
-      addCorsHeaders();
-
-      server.send(
-        200,
-        "text/plain",
-        "EAAR AGRIBOT ESP32 ONLINE"
-      );
-    }
-  );
-
-  server.on(
-    "/command",
-    HTTP_GET,
-    handleWebCommand
-  );
-
-  server.on(
-    "/command",
-    HTTP_OPTIONS,
-    handleOptions
-  );
-
-  server.on(
-    "/status",
-    HTTP_GET,
-    handleWebStatus
-  );
-
-  server.on(
-    "/status",
-    HTTP_OPTIONS,
-    handleOptions
-  );
-
-  server.begin();
-
-  Serial.println("HTTP SERVER: STARTED");
-}
-
+// =====================================================
+// BLUETOOTH
+// =====================================================
 // =====================================================
 // SETUP
 // =====================================================
@@ -423,14 +194,7 @@ void setup() {
 
   // API key is stored in the same Preferences namespace as the route.
   // It is created only once and survives normal ESP32 restarts.
-  loadOrCreateApiKey();
-
-  // Give the USB/regulator supply a moment to settle before the
-  // Wi-Fi radio starts its connection attempt.
-  delay(500);
-
-  connectWiFi();
-  startWebServer();
+  startEspNow();
 
   Serial.println();
   Serial.println("================================");
@@ -448,7 +212,8 @@ void setup() {
   Serial.println("Colors: red green blue yellow moon maroon peacock off");
   Serial.println("Effects: snake fade dj");
   Serial.println("================================");
-  Serial.println("READY");
+  Serial.println("ESP-NOW READY");
+  Serial.println("Website -> S3 -> ESP-NOW -> DevKit");
 }
 
 // =====================================================
@@ -456,45 +221,6 @@ void setup() {
 // =====================================================
 
 void loop() {
-
-  // =============================================
-  // WEB SERVER
-  // =============================================
-
-  server.handleClient();
-
-  // =============================================
-  // WIFI RECONNECT
-  // =============================================
-
-  if (WiFi.status() != WL_CONNECTED) {
-
-    static unsigned long lastReconnectAttempt = 0;
-
-    if (millis() - lastReconnectAttempt > 5000) {
-
-      lastReconnectAttempt = millis();
-
-      WiFi.disconnect();
-      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-      Serial.println("WIFI: RECONNECTING...");
-    }
-  }
-
-  // =============================================
-  // WEBSITE COMMAND SAFETY TIMEOUT
-  // =============================================
-
-  if (webCommandActive &&
-      millis() - lastWebCommandTime > WEB_COMMAND_TIMEOUT_MS) {
-
-    handleMotorCommand('S');
-
-    webCommandActive = false;
-
-    Serial.println("WEB COMMAND TIMEOUT -> STOP");
-  }
 
   // =============================================
   // HEADING CORRECTION (non-blocking)
@@ -515,6 +241,9 @@ void loop() {
       lastCorrection = c;
     }
   }
+
+  updateEspNowChannelSearch();
+  processEspNowCommand();
 
   applyDrive();
   updateSnake();
