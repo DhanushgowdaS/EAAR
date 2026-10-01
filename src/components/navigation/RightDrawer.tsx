@@ -147,7 +147,7 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                   {t('language_select')}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 {LANGUAGES.map((lang) => (
                   <button
                     key={lang.code}
@@ -294,11 +294,11 @@ export const RightDrawer: React.FC<RightDrawerProps> = ({ isOpen, onClose }) => 
                         key={item.command}
                         type="button"
                         onClick={() => window.dispatchEvent(new CustomEvent('eaar-lighting-command', { detail: { command: item.command } }))}
-                        className={`rounded-lg border px-2.5 py-2.5 text-left transition-all hover:brightness-125 ${item.cls}`}
+                        className={`rounded-md border px-2 py-2 text-left transition-all hover:brightness-125 ${item.cls}`}
                       >
-                        <Icon className="w-4 h-4 mb-1" />
-                        <div className="text-[10px] font-mono font-semibold">{item.label}</div>
-                        {item.detail && <div className="text-[8px] font-mono opacity-60">{item.detail}</div>}
+                        <Icon className="w-3.5 h-3.5 mb-0.5" />
+                        <div className="text-[9px] font-mono font-semibold leading-tight">{item.label}</div>
+                        {item.detail && <div className="text-[7px] font-mono opacity-60 leading-tight">{item.detail}</div>}
                       </button>
                     );
                   })}
