@@ -39,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
   };
 
   const searchTargets = [
-    { keywords: ['navigation controller', 'remote', 'joystick', 'arrow controller', 'controller'], section: 'live-status', label: 'Navigation Controller — Remote / Joystick / Arrow Controller' },
+    { keywords: ['navigation controller', 'remote', 'joystick', 'arrow controller', 'controller'], section: 'navigation-controller', label: 'Navigation Controller — Remote / Joystick / Arrow Controller' },
     { keywords: ['home'], section: 'home', label: 'Home' },
     { keywords: ['about', 'ar', 'computer module', 'supported regions'], section: 'about', label: 'About — AR Computer Module / Supported Regions' },
     { keywords: ['temperature', 'humidity', 'moisture', 'environmental condition'], section: 'results', label: 'Field Inspection — Environmental Conditions' },
@@ -67,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
         element.id === target.section || element.dataset.section === target.section ||
         element.innerText.toLowerCase().includes(target.keywords[0])
       );
-      return { element: section || document.querySelector('main') as HTMLElement, label: target.label };
+      return { element: section || document.querySelector('main') as HTMLElement, label: target.label, keyword: target.keywords[0] };
     });
   };
 
@@ -202,7 +202,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDrawer }) => {
                     <button
                       key={index}
                       type="button"
-                      onClick={() => goToSearchResult(match.label)}
+                      onClick={() => goToSearchResult(match.keyword)}
                       className="w-full text-left px-3 py-2.5 text-xs font-mono text-slate-300 hover:bg-emerald-950/60 hover:text-emerald-300 transition-colors"
                     >
                       {match.label}
