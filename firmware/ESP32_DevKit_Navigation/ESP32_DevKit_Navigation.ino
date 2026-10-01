@@ -143,6 +143,14 @@ void loadOrCreateApiKey() {
 void connectWiFi() {
 
   WiFi.mode(WIFI_STA);
+
+  // Reduce Wi-Fi transmit power to lower the instantaneous current
+  // demand during startup and normal operation.
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+
+  Serial.println("WIFI: RADIO INITIALIZED");
+  Serial.println("WIFI: STARTING CONNECTION...");
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   Serial.println();
@@ -392,13 +400,17 @@ void setup() {
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
 
-  analogWrite(ENA, SPEED);
-  analogWrite(ENB, SPEED);
+  // Keep the motor-driver enable pins OFF during startup.
+  // This prevents the connected motor driver from drawing unnecessary
+  // current while the ESP32 is initializing and connecting to Wi-Fi.
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
 
   stopMotor();
 
   strip.begin();
-  strip.setBrightness(255);
+  // Keep NeoPixels at a moderate brightness to reduce 5V current draw.
+  strip.setBrightness(64);
   strip.show();
 
   prefs.begin("agribot", false);
@@ -406,6 +418,10 @@ void setup() {
   // API key is stored in the same Preferences namespace as the route.
   // It is created only once and survives normal ESP32 restarts.
   loadOrCreateApiKey();
+
+  // Give the USB/regulator supply a moment to settle before the
+  // Wi-Fi radio starts its connection attempt.
+  delay(500);
 
   connectWiFi();
   startWebServer();
@@ -994,19 +1010,15 @@ void handleMotorCommand(char command) {
 
 void applyDrive() {
 
-  if (automaticMode || recording) {
-
-    analogWrite(ENA, SPEED);
-    analogWrite(ENB, SPEED);
-
-    return;
-  }
-
+  // Keep the motor-driver enable pins OFF whenever the rover is stopped.
+  // This reduces unnecessary current draw while idle and during startup.
   if (currentState != 'F' &&
-      currentState != 'B') {
+      currentState != 'B' &&
+      currentState != 'L' &&
+      currentState != 'R') {
 
-    analogWrite(ENA, SPEED);
-    analogWrite(ENB, SPEED);
+    analogWrite(ENA, 0);
+    analogWrite(ENB, 0);
 
     return;
   }
@@ -1014,24 +1026,29 @@ void applyDrive() {
   int leftSpeed = SPEED;
   int rightSpeed = SPEED;
 
-  char corr = lastCorrection;
+  // During automatic playback or recording, use full configured speed.
+  if (!automaticMode && !recording &&
+      (currentState == 'F' || currentState == 'B')) {
 
-  if (currentState == 'B') {
+    char corr = lastCorrection;
 
-    if (corr == 'L') corr = 'R';
-    else if (corr == 'R') corr = 'L';
-  }
+    if (currentState == 'B') {
 
-  if (corr == 'L') {
+      if (corr == 'L') corr = 'R';
+      else if (corr == 'R') corr = 'L';
+    }
 
-    leftSpeed =
-      SPEED - CORR_AMOUNT;
-  }
+    if (corr == 'L') {
 
-  else if (corr == 'R') {
+      leftSpeed =
+        SPEED - CORR_AMOUNT;
+    }
 
-    rightSpeed =
-      SPEED - CORR_AMOUNT;
+    else if (corr == 'R') {
+
+      rightSpeed =
+        SPEED - CORR_AMOUNT;
+    }
   }
 
   analogWrite(ENA, leftSpeed);
@@ -1440,4 +1457,8 @@ void stopMotor() {
 
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, LOW);
+
+  // Disable both motor-driver channels while stopped.
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
 }
