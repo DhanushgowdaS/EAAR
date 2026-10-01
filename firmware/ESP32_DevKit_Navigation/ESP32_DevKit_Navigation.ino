@@ -38,6 +38,61 @@
 
 const uint8_t DEVKIT_MAC[6] = {0x6C, 0xC8, 0x40, 0x56, 0xC6, 0x78};
 
+// =====================================================
+// NAVIGATION / HARDWARE STATE
+// =====================================================
+
+HardwareSerial HC05(2);
+HardwareSerial NanoSerial(1);
+Preferences prefs;
+Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+struct RouteRecord {
+  char command;
+  unsigned long duration;
+};
+
+RouteRecord route[MAX_RECORDS];
+int routeCount = 0;
+
+char currentState = 'S';
+unsigned long stateStartTime = 0;
+
+bool recording = false;
+bool automaticMode = false;
+
+char lastCorrection = 'N';
+
+char cmdBuffer[16];
+int bufLen = 0;
+unsigned long lastCharTime = 0;
+const unsigned long GAP_MS = 60;
+
+// NeoPixel color state
+int currentR = 255;
+int currentG = 190;
+int currentB = 20;
+
+// Snake effect
+bool snakeActive = false;
+bool snakeGrowing = true;
+int snakeStep = 0;
+unsigned long lastSnakeStep = 0;
+
+// Fade effect
+bool fadeActive = false;
+uint16_t fadeHue = 0;
+unsigned long lastFadeStep = 0;
+
+// DJ effect
+bool djActive = false;
+uint16_t djHue = 0;
+unsigned long lastDjStep = 0;
+
+// =====================================================
+// ESP-NOW RECEIVER STATE
+// =====================================================
+
 volatile char espNowPendingCommand = 0;
 volatile bool espNowCommandPending = false;
 
