@@ -1,4 +1,5 @@
-#include <BluetoothSerial.h>
+#include <WiFi.h>
+#include <WebServer.h>
 #include <Preferences.h>
 #include <Adafruit_NeoPixel.h>
 
@@ -72,16 +73,18 @@ uint16_t djHue = 0;
 unsigned long lastDjStep = 0;
 
 // =====================================================
-// CLASSIC BLUETOOTH LINK
+// WIFI WEB SERVER LINK
 // =====================================================
 
-// The original ESP32 DevKit has Bluetooth Classic SPP.
-// It acts as the Bluetooth master and connects to the HC-05
-// attached to the ESP32-S3.
-BluetoothSerial SerialBT;
-const char *HC05_BT_NAME = "HC-05";
-unsigned long lastBtConnectAttempt = 0;
-const unsigned long BT_RECONNECT_MS = 15000;
+// The ESP32 DevKit connects directly to the same Wi-Fi network as
+// the computer/phone running the EAAR website. The website sends
+// navigation commands directly to this ESP32 over HTTP.
+
+#define WIFI_SSID     "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#define API_KEY       "eaar-navigation-esp32-api-key-v1"
+
+WebServer server(80);
 
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
@@ -91,67 +94,139 @@ bool isNavigationCommand(char command) {
          command == 'D';
 }
 
-void startBluetoothLink() {
+void sendCorsHeaders() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+void handleCommand() {
+  sendCorsHeaders();
+
+  String key = server.hasArg("key") ? server.arg("key") : "";
+  String cmd = server.hasArg("cmd") ? server.arg("cmd") : "";
+
+  if (key != API_KEY) {
+    server.send(401, "application/json",
+                "{\"ok\":false,\"error\":\"unauthorized\"}");
+    return;
+  }
+
+  if (cmd.length() != 1 || !isNavigationCommand(cmd[0])) {
+    server.send(400, "application/json",
+                "{\"ok\":false,\"error\":\"invalid command\"}");
+    return;
+  }
+
+  char command = cmd[0];
+
   Serial.println();
   Serial.println("================================");
-  Serial.println(" CLASSIC BLUETOOTH LINK");
+  Serial.println(" WEBSITE COMMAND RECEIVED");
+  Serial.print("COMMAND: ");
+  Serial.println(command);
+  Serial.println("SOURCE: EAAR WEBSITE -> WIFI -> ESP32 DEVKIT");
   Serial.println("================================");
 
-  if (!SerialBT.begin("EAAR-DEVKIT", true)) {
-    Serial.println("BLUETOOTH INIT: FAILED");
-    return;
-  }
+  handleMotorCommand(command);
 
-  Serial.println("BLUETOOTH INIT: OK");
-  Serial.print("TARGET: ");
-  Serial.println(HC05_BT_NAME);
-  Serial.println("CONNECTING TO HC-05...");
+  String response = "{\"ok\":true,\"command\":\"";
+  response += command;
+  response += "\",\"device\":\"EAAR-ESP32-DEVKIT\"}";
 
-  if (SerialBT.connect(HC05_BT_NAME)) {
-    Serial.println("BLUETOOTH: CONNECTED TO HC-05");
-  } else {
-    Serial.println("BLUETOOTH: NOT CONNECTED YET");
-    Serial.println("Will retry automatically.");
-  }
-
-  lastBtConnectAttempt = millis();
+  server.send(200, "application/json", response);
 }
 
-void updateBluetoothLink() {
-  if (SerialBT.connected()) {
-    return;
-  }
+void handleStatus() {
+  sendCorsHeaders();
 
-  if (millis() - lastBtConnectAttempt < BT_RECONNECT_MS) {
-    return;
-  }
+  String response = "{";
+  response += "\"device\":\"EAAR-ESP32-DEVKIT\",";
+  response += "\"wifi\":\"";
+  response += (WiFi.status() == WL_CONNECTED ? "connected" : "disconnected");
+  response += "\",";
+  response += "\"ip\":\"";
+  response += WiFi.localIP().toString();
+  response += "\",";
+  response += "\"command\":\"";
+  response += currentState;
+  response += "\",";
+  response += "\"recording\":";
+  response += (recording ? "true" : "false");
+  response += ",";
+  response += "\"automatic\":";
+  response += (automaticMode ? "true" : "false");
+  response += "}";
 
-  lastBtConnectAttempt = millis();
-
-  Serial.println("[BT] Reconnecting to HC-05...");
-
-  if (SerialBT.connect(HC05_BT_NAME)) {
-    Serial.println("[BT] HC-05 CONNECTED");
-  } else {
-    Serial.println("[BT] HC-05 connection attempt failed");
-  }
+  server.send(200, "application/json", response);
 }
 
-void processBluetoothCommand() {
-  while (SerialBT.available()) {
-    char c = (char)SerialBT.read();
+void handleOptions() {
+  sendCorsHeaders();
+  server.send(204);
+}
 
-    if (isNavigationCommand(c)) {
-      Serial.println();
-      Serial.println("================================");
-      Serial.println(" WEBSITE COMMAND RECEIVED");
-      Serial.print("COMMAND: ");
-      Serial.println(c);
-      Serial.println("SOURCE: S3 -> HC-05 -> ESP32 DEVKIT");
-      Serial.println("================================");
-      handleMotorCommand(c);
-    }
+void startWiFiServer() {
+  Serial.println();
+  Serial.println("================================");
+  Serial.println(" DIRECT WIFI WEBSITE LINK");
+  Serial.println("================================");
+  Serial.println("Communication: WEBSITE -> WIFI -> ESP32 DEVKIT");
+  Serial.println("No ESP32-S3 gateway is used for navigation.");
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname("eaar-devkit");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  Serial.print("Connecting to Wi-Fi");
+
+  unsigned long startAttempt = millis();
+
+  while (WiFi.status() != WL_CONNECTED &&
+         millis() - startAttempt < 20000) {
+    delay(500);
+    Serial.print(".");
   }
+
+  Serial.println();
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WIFI: CONNECTION FAILED");
+    Serial.println("Check WIFI_SSID and WIFI_PASSWORD.");
+    return;
+  }
+
+  Serial.println("WIFI: CONNECTED");
+  Serial.print("SSID: ");
+  Serial.println(WIFI_SSID);
+  Serial.print("DEVKIT IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.println("Website can use the IP above.");
+  Serial.println("mDNS name: http://eaar-devkit.local");
+
+  server.on("/command", HTTP_GET, handleCommand);
+  server.on("/command", HTTP_OPTIONS, handleOptions);
+  server.on("/status", HTTP_GET, handleStatus);
+  server.on("/status", HTTP_OPTIONS, handleOptions);
+
+  server.on("/", HTTP_GET, []() {
+    sendCorsHeaders();
+    server.send(200, "text/plain",
+                "EAAR ESP32 DevKit navigation server is online.");
+  });
+
+  server.onNotFound([]() {
+    sendCorsHeaders();
+    server.send(404, "application/json",
+                "{\"ok\":false,\"error\":\"not found\"}");
+  });
+
+  server.begin();
+
+  Serial.println("HTTP SERVER: STARTED");
+  Serial.println("ENDPOINT: /command?cmd=F&key=...");
+  Serial.println("ENDPOINT: /status");
+  Serial.println("================================");
 }
 
 // =====================================================
@@ -172,7 +247,7 @@ void setup() {
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
 
-  startBluetoothLink();
+  startWiFiServer();
 
   // Keep the motor-driver enable pins OFF during startup.
   // This prevents the connected motor driver from drawing unnecessary
@@ -207,8 +282,8 @@ void setup() {
   Serial.println("Colors: red green blue yellow moon maroon peacock off");
   Serial.println("Effects: snake fade dj");
   Serial.println("================================");
-  Serial.println("BLUETOOTH READY");
-  Serial.println("Website -> S3 -> HC-05 -> Bluetooth -> DevKit");
+  Serial.println("WIFI READY");
+  Serial.println("Website -> Wi-Fi -> DevKit");
   Serial.println("Website commands will be printed above when received.");
 }
 
@@ -238,23 +313,13 @@ void loop() {
     }
   }
 
-  updateBluetoothLink();
-  processBluetoothCommand();
+  server.handleClient();
 
   applyDrive();
   updateSnake();
   updateFade();
   updateDJ();
 
-    if (bufLen > 0 &&
-      millis() - lastCharTime > GAP_MS) {
-
-    cmdBuffer[bufLen] = '\0';
-
-    processToken();
-
-    bufLen = 0;
-  }
 }
 
 // =====================================================
