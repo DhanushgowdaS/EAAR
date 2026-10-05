@@ -118,7 +118,7 @@ void handleLightingCommand(char command) {
     case '3': setColor(0, 0, 255); Serial.println("LIGHTING: ACTIVE / BLUE"); break;
     case '4': setColor(255, 255, 0); Serial.println("LIGHTING: TRAINING / YELLOW"); break;
     case '5': setColor(255, 190, 20); Serial.println("LIGHTING: NIGHT / WARM"); break;
-    case '6': setColor(128, 0, 32); Serial.println("LIGHTING: HARVEST / MAROON"); break;
+    case '6': setColor(80, 0, 20); Serial.println("LIGHTING: HARVEST / MAROON"); break;
     case '7': setColor(0, 130, 140); Serial.println("LIGHTING: SCAN / PEACOCK"); break;
     case '8': setColor(0, 0, 0); Serial.println("LIGHTING: OFF"); break;
     case '9':
@@ -460,7 +460,7 @@ void setup() {
   // unnecessary power surge during Wi-Fi initialization.
   strip.begin();
   strip.setBrightness(ledBrightness);
-  strip.fill(strip.Color(128, 0, 32));
+  strip.fill(strip.Color(80, 0, 20));
   strip.show();
 
   currentR = 128;
@@ -622,7 +622,7 @@ void processToken() {
 
   else if (word == "maroon") {
 
-    setColor(128, 0, 32);
+    setColor(80, 0, 20);
   }
 
   else if (word == "peacock") {
