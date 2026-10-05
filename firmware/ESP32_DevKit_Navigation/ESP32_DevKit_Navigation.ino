@@ -459,8 +459,8 @@ void setup() {
   // command is received, reducing startup current and avoiding an
   // unnecessary power surge during Wi-Fi initialization.
   strip.begin();
-  strip.setBrightness(0);
-  strip.clear();
+  strip.setBrightness(ledBrightness);
+  strip.fill(strip.Color(96, 0, 0));
   strip.show();
 
   currentR = 128;
