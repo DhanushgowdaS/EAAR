@@ -110,6 +110,8 @@ bool isLightingCommand(char command) {
 }
 
 void handleLightingCommand(char command) {
+  strip.setBrightness(ledBrightness);
+
   switch (command) {
     case '1': setColor(255, 0, 0); Serial.println("LIGHTING: ALERT / RED"); break;
     case '2': setColor(0, 255, 0); Serial.println("LIGHTING: READY / GREEN"); break;
@@ -444,35 +446,31 @@ void setup() {
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
 
-  startWiFiServer();
-
-  // Keep the motor-driver enable pins OFF during startup.
-  // This prevents the connected motor driver from drawing unnecessary
-  // current while the ESP32 is initializing and connecting to Wi-Fi.
-  analogWrite(ENA, 0);
-  analogWrite(ENB, 0);
-
+  // Initialize the motor driver first and keep both channels disabled.
+  // This guarantees a known safe motor state before Wi-Fi/LED startup.
   stopMotor();
 
-  strip.begin();
-  // Use full NeoPixel brightness by default; the website can reduce it remotely.
   prefs.begin("agribot", false);
   ledBrightness = prefs.getUChar("ledBright", 255);
-  strip.setBrightness(ledBrightness);
+  forwardBackwardSpeed = prefs.getUChar("fbSpeed", DEFAULT_SPEED);
+  leftRightSpeed = prefs.getUChar("lrSpeed", DEFAULT_TURN_SPEED);
 
-  // Default startup lighting: MAROON.
+  // Initialize NeoPixels OFF. They are enabled only when a lighting
+  // command is received, reducing startup current and avoiding an
+  // unnecessary power surge during Wi-Fi initialization.
+  strip.begin();
+  strip.setBrightness(0);
+  strip.clear();
+  strip.show();
+
   currentR = 128;
   currentG = 0;
   currentB = 32;
   snakeActive = false;
   fadeActive = false;
   djActive = false;
-  for (int i = 0; i < NUM_LEDS; i++) {
-    strip.setPixelColor(i, strip.Color(currentR, currentG, currentB));
-  }
-  strip.show();
-  forwardBackwardSpeed = prefs.getUChar("fbSpeed", DEFAULT_SPEED);
-  leftRightSpeed = prefs.getUChar("lrSpeed", DEFAULT_TURN_SPEED);
+
+  startWiFiServer();
 
   // Route data remains stored in Preferences across restarts.
 
@@ -544,7 +542,7 @@ void loop() {
     char btCommand = HC05Serial.read();
 
     // Ignore line endings/spaces commonly added by Bluetooth apps.
-    if (btCommand == '\\r' || btCommand == '\\n' || btCommand == ' ') {
+    if (btCommand == '\r' || btCommand == '\n' || btCommand == ' ') {
       continue;
     }
 
