@@ -460,7 +460,7 @@ void setup() {
   // unnecessary power surge during Wi-Fi initialization.
   strip.begin();
   strip.setBrightness(ledBrightness);
-  strip.fill(strip.Color(96, 0, 0));
+  strip.fill(strip.Color(128, 0, 32));
   strip.show();
 
   currentR = 128;
