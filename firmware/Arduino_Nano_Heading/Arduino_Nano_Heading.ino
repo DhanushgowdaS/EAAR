@@ -79,7 +79,7 @@ void loop() {
 
   float gz = (readGyroZ() - gyroZoffset) / GYRO_SENS;
 
-  yaw -= gz * dt;
+  yaw += gz * dt;
 
   while (yaw > 180.0) {
     yaw -= 360.0;
