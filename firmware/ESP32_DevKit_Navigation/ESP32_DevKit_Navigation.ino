@@ -405,9 +405,10 @@ void handleCommand(char command) {
 }
 
 void applyDrive() {
-  // If either ultrasonic sensor is below 20 cm, block FORWARD only.
-  // Left, right, and backward movement remain available.
-  if (currentState == 'F' && frontObstacleDetected()) {
+  // If either ultrasonic sensor detects an obstacle, block
+  // FORWARD and BACKWARD. Left and right remain available.
+  if ((currentState == 'F' || currentState == 'B') &&
+      frontObstacleDetected()) {
     stopMotor();
     return;
   }
