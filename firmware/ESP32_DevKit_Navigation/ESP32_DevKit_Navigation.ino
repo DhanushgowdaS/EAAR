@@ -635,12 +635,16 @@ void startAutomatic() {
 
   Serial.println("AUTOMATIC STARTED");
 
+  // Checkpoints are used only for the FIRST forward movement.
+  bool firstForwardCheckpointUsed = false;
+
   for (int i = 0; i < routeCount && automaticMode; i++) {
     char command = route[i].command;
     unsigned long duration = route[i].duration;
 
-    if (command == 'F') {
+    if (command == 'F' && !firstForwardCheckpointUsed) {
       runForwardWithCheckpoints(duration);
+      firstForwardCheckpointUsed = true;
     } else {
       currentState = command;
 
