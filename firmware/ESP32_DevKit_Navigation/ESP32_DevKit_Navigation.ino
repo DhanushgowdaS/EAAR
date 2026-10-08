@@ -17,6 +17,7 @@
 #define CORR_AMOUNT 40
 #define CORR_TIMEOUT_MS 200
 #define MAX_RECORDS 100
+
 #define LED_PIN 4
 #define LED_COUNT 8
 #define LED_BRIGHTNESS 255
