@@ -648,7 +648,9 @@ void startAutomatic() {
     } else {
       currentState = command;
 
-      if (command == 'B') {
+      if (command == 'F') {
+        forward();
+      } else if (command == 'B') {
         backward();
       } else if (command == 'L') {
         left();
