@@ -141,8 +141,7 @@ void readBluetooth() {
   while (HC05Serial.available()) {
     char command = HC05Serial.read();
 
-    if (command == '' || command == '
-' || command == ' ') {
+    if (command == '\r' || command == '\n' || command == ' ') {
       continue;
     }
 
@@ -215,6 +214,8 @@ void handleCommand(char command) {
     } else {
       automaticMode = false;
       currentState = 'S';
+      obstacleCorrection = false;
+      obstacleTurnDirection = 'N';
       stopMotor();
     }
     return;
@@ -248,6 +249,7 @@ float readDistanceCM(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
 
   unsigned long duration = pulseIn(echoPin, HIGH, 25000);
+
   if (duration == 0) {
     return 400.0;
   }
@@ -270,8 +272,18 @@ void setObstacleLeds(bool active) {
 }
 
 void handleObstacle() {
-  if (recording || currentState == 'S' ||
+  if (recording ||
       (currentState != 'F' && currentState != 'B')) {
+    return;
+  }
+
+  if (obstacleCorrection) {
+    if (millis() - obstacleTurnStart >= OBSTACLE_TURN_TIME_MS) {
+      obstacleCorrection = false;
+      obstacleTurnDirection = 'N';
+      stopMotor();
+    }
+
     return;
   }
 
@@ -282,38 +294,21 @@ void handleObstacle() {
   bool obstacleB = distanceB < OBSTACLE_DISTANCE_CM;
 
   if (!obstacleA && !obstacleB) {
-    if (obstacleCorrection) {
-      obstacleCorrection = false;
-      obstacleTurnDirection = 'N';
-      stopMotor();
-    }
     setObstacleLeds(false);
     return;
   }
 
   setObstacleLeds(true);
-
-  if (obstacleCorrection) {
-    if (millis() - obstacleTurnStart < OBSTACLE_TURN_TIME_MS) {
-      return;
-    }
-
-    obstacleCorrection = false;
-    obstacleTurnDirection = 'N';
-    stopMotor();
-    return;
-  }
-
   stopMotor();
 
   if (obstacleA && obstacleB) {
-    float difference = distanceA > distanceB
-                         ? distanceA - distanceB
-                         : distanceB - distanceA;
+    float difference = fabs(distanceA - distanceB);
 
     if (difference <= SIMILAR_DISTANCE_CM) {
       currentState = 'S';
       automaticMode = false;
+      obstacleCorrection = false;
+      obstacleTurnDirection = 'N';
       return;
     }
 
@@ -554,6 +549,8 @@ void deleteFlash() {
   automaticMode = false;
   routeCount = 0;
   currentState = 'S';
+  obstacleCorrection = false;
+  obstacleTurnDirection = 'N';
 
   prefs.remove("count");
   prefs.remove("route");
@@ -605,9 +602,6 @@ void right() {
 }
 
 void stopMotor() {
-  obstacleCorrection = false;
-  obstacleTurnDirection = 'N';
-
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW);
