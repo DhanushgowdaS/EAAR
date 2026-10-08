@@ -38,12 +38,7 @@
 
 // Automatic forward checkpoint settings
 #define CHECKPOINT_MOVE_SECONDS 4
-
-// ESP32-S3 checkpoint handshake
-// DevKit GPIO14 -> S3 GPIO7  : checkpoint trigger
-// S3 GPIO10   -> DevKit GPIO21: arm ready / resume
-#define S3_CHECKPOINT_TRIGGER 14
-#define S3_READY_INPUT 21
+#define CHECKPOINT_PAUSE_SECONDS 2
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -65,8 +60,6 @@ unsigned long stateStartTime = 0;
 
 bool recording = false;
 bool automaticMode = false;
-bool obstaclePausedRecording = false;
-unsigned long obstaclePauseStartTime = 0;
 float ultrasonicDistanceA = -1.0;
 float ultrasonicDistanceB = -1.0;
 
@@ -76,28 +69,6 @@ bool isNavigationCommand(char command) {
          command == 'S' || command == 'T' ||
          command == 'E' || command == 'M' ||
          command == 'A' || command == 'D';
-}
-
-void handleTrainingCommand(char phase) {
-  if (phase == 'A') {
-    startRecording();
-    Serial.println("GOING TRAINING STARTED (TA)");
-  } else if (phase == 'B') {
-    if (!recording) {
-      Serial.println("START GOING TRAINING FIRST");
-      return;
-    }
-
-    if (currentState != 'S') {
-      recordCurrentState();
-    }
-
-    currentState = 'S';
-    stateStartTime = millis();
-    obstaclePausedRecording = false;
-
-    Serial.println("COMING-BACK TRAINING STARTED (TB)");
-  }
 }
 
 void setup() {
@@ -122,10 +93,6 @@ void setup() {
 
   pinMode(OBSTACLE_LED_1, OUTPUT);
   pinMode(OBSTACLE_LED_2, OUTPUT);
-
-  pinMode(S3_CHECKPOINT_TRIGGER, OUTPUT);
-  pinMode(S3_READY_INPUT, INPUT_PULLDOWN);
-  digitalWrite(S3_CHECKPOINT_TRIGGER, LOW);
 
   digitalWrite(ULTRASONIC_A_TRIG, LOW);
   digitalWrite(ULTRASONIC_B_TRIG, LOW);
@@ -153,8 +120,6 @@ void setup() {
   Serial.println("M = Store Route");
   Serial.println("A = Automatic");
   Serial.println("D = Delete Route");
-  Serial.println("S3 Trigger: GPIO14 -> S3 GPIO7");
-  Serial.println("S3 Ready: S3 GPIO10 -> GPIO21");
   Serial.println("HC-05: RX16/TX17 @ 9600");
   Serial.println("Nano:  RX27/TX19 @ 9600");
   Serial.println("Ultrasonic A: TRIG18 ECHO5");
@@ -199,25 +164,6 @@ void loop() {
     Serial.println(obstacle ? "YES" : "NO");
 
     updateObstacleIndicators(obstacle);
-
-    // During GOING/COMING-BACK training, obstacle waiting time is not recorded.
-    if (recording && (currentState == 'F' || currentState == 'B')) {
-      if (obstacle && !obstaclePausedRecording) {
-        obstaclePausedRecording = true;
-        obstaclePauseStartTime = millis();
-        stopMotor();
-      } else if (!obstacle && obstaclePausedRecording) {
-        unsigned long pausedTime = millis() - obstaclePauseStartTime;
-        stateStartTime += pausedTime;
-        obstaclePausedRecording = false;
-
-        if (currentState == 'F') {
-          forward();
-        } else if (currentState == 'B') {
-          backward();
-        }
-      }
-    }
   }
 
   applyDrive();
@@ -289,8 +235,6 @@ void readHeadingCorrection() {
 }
 
 void readBluetooth() {
-  static bool pendingT = false;
-
   while (HC05Serial.available()) {
     char command = HC05Serial.read();
 
@@ -298,36 +242,18 @@ void readBluetooth() {
       continue;
     }
 
-    command = toupper(command);
-
-    if (pendingT) {
-      pendingT = false;
-
-      if (command == 'A' || command == 'B') {
-        Serial.print("BT CMD: T");
-        Serial.println(command);
-        handleTrainingCommand(command);
-        continue;
-      }
-
-      Serial.println("BT CMD: T");
-      handleCommand('T');
-    }
-
-    if (command == 'T') {
-      pendingT = true;
-      continue;
-    }
-
     if (isNavigationCommand(command) ||
-        command == 'F' || command == 'B' ||
-        command == 'L' || command == 'R' ||
-        command == 'S' || command == 'E' ||
-        command == 'M' || command == 'A' ||
-        command == 'D') {
+        command == 'f' || command == 'b' ||
+        command == 'l' || command == 'r' ||
+        command == 's' || command == 't' ||
+        command == 'e' || command == 'm' ||
+        command == 'a' || command == 'd') {
+
+      command = toupper(command);
 
       Serial.print("BT CMD: ");
       Serial.println(command);
+
       handleCommand(command);
     }
   }
@@ -416,10 +342,9 @@ void handleCommand(char command) {
 }
 
 void applyDrive() {
-  // If either ultrasonic sensor detects an obstacle, block
-  // FORWARD and BACKWARD. Left and right remain available.
-  if ((currentState == 'F' || currentState == 'B') &&
-      frontObstacleDetected()) {
+  // If either ultrasonic sensor is below 20 cm, block FORWARD only.
+  // Left, right, and backward movement remain available.
+  if (currentState == 'F' && frontObstacleDetected()) {
     stopMotor();
     return;
   }
@@ -482,7 +407,6 @@ void startRecording() {
   currentState = 'S';
   recording = true;
   automaticMode = false;
-  obstaclePausedRecording = false;
   stateStartTime = millis();
 
   Serial.println("TRAINING STARTED");
@@ -516,14 +440,8 @@ void recordCurrentState() {
     return;
   }
 
-  unsigned long elapsed = millis() - stateStartTime;
-
-  if (obstaclePausedRecording) {
-    elapsed = obstaclePauseStartTime - stateStartTime;
-  }
-
   route[routeCount].command = currentState;
-  route[routeCount].duration = elapsed;
+  route[routeCount].duration = millis() - stateStartTime;
   routeCount++;
 }
 
@@ -537,7 +455,6 @@ void endRecording() {
 
   stopMotor();
   recording = false;
-  obstaclePausedRecording = false;
   currentState = 'S';
   stateStartTime = millis();
 
@@ -661,23 +578,19 @@ void runForwardWithCheckpoints(unsigned long totalMoveTime) {
       break;
     }
 
-    // Checkpoint reached: stop and trigger the ESP32-S3.
-    // There is NO fixed 2-second delay now.
+    // Checkpoint reached: stop for 2 seconds.
     Serial.print("CHECKPOINT REACHED AT ");
     Serial.print(movementElapsed / 1000UL);
-    Serial.println(" seconds. Triggering ESP32-S3 and waiting for READY");
+    Serial.println(" seconds. Waiting for 2 seconds");
 
     currentState = 'S';
     stopMotor();
 
-    // Send a short checkpoint trigger pulse to the ESP32-S3.
-    digitalWrite(S3_CHECKPOINT_TRIGGER, HIGH);
-    delay(100);
-    digitalWrite(S3_CHECKPOINT_TRIGGER, LOW);
+    unsigned long pauseStart = millis();
 
-    // Wait indefinitely for the ESP32-S3 READY signal.
-    // This wait time is outside the stored movement duration.
-    while (automaticMode && digitalRead(S3_READY_INPUT) == LOW) {
+    while (automaticMode &&
+           millis() - pauseStart <
+           (unsigned long)CHECKPOINT_PAUSE_SECONDS * 1000UL) {
       readHeadingCorrection();
       readBluetooth();
 
@@ -686,14 +599,13 @@ void runForwardWithCheckpoints(unsigned long totalMoveTime) {
       bool obstacle = frontObstacleDetected();
       updateObstacleIndicators(obstacle);
 
+      // Pause time is NOT counted in movementElapsed.
       delay(5);
     }
 
     if (!automaticMode) {
       return;
     }
-
-    Serial.println("ESP32-S3 READY RECEIVED. CONTINUING ROUTE");
 
     // Continue counting from the previous movement time.
     nextCheckpoint += (unsigned long)CHECKPOINT_MOVE_SECONDS * 1000UL;
