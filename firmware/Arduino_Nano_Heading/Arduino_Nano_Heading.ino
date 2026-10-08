@@ -1,6 +1,9 @@
 #include <Wire.h>
 
-// Serial is the Nano-to-ESP32 heading-control link.\n// N = no correction, L = correct left, R = correct right.\n// Do not add debug text to Serial; it would corrupt the control protocol.\n
+// Serial is the Nano-to-ESP32 heading-control link.
+// N = no correction, L = correct left, R = correct right.
+// Do not add debug text to Serial; it would corrupt the control protocol.
+
 #define MPU_ADDR 0x68
 #define PWR_MGMT_1 0x6B
 #define GYRO_ZOUT_H 0x47
