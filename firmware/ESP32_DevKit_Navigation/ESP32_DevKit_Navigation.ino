@@ -166,8 +166,6 @@ void processLightingCommand(const char *command) {
     setColor(255, 20, 100);
   } else if (strcmp(command, "WARM") == 0) {
     setColor(255, 100, 20);
-  } else if (strcmp(command, "MAROON") == 0) {
-    setColor(80, 0, 20);
   } else if (strcmp(command, "PEACOCK") == 0) {
     setColor(0, 180, 180);
   } else if (strcmp(command, "OFF") == 0) {
@@ -204,7 +202,6 @@ void processCommandText(char *command) {
       strcmp(command, "PURPLE") == 0 ||
       strcmp(command, "PINK") == 0 ||
       strcmp(command, "WARM") == 0 ||
-      strcmp(command, "MAROON") == 0 ||
       strcmp(command, "PEACOCK") == 0 ||
       strcmp(command, "OFF") == 0 ||
       strcmp(command, "SNAKE") == 0 ||
@@ -326,7 +323,7 @@ void setup() {
   Serial.println("A = Automatic");
   Serial.println("D = Delete Route");
   Serial.println("LED: RED GREEN BLUE YELLOW CYAN MAGENTA WHITE");
-  Serial.println("LED: ORANGE PURPLE PINK WARM MAROON PEACOCK OFF");
+  Serial.println("LED: ORANGE PURPLE PINK WARM CYAN PEACOCK OFF");
   Serial.println("EFFECTS: SNAKE FADE FADING DJ");
   Serial.println("HC-05: RX16/TX17 @ 9600");
   Serial.println("Nano:  RX27/TX14 @ 9600");
