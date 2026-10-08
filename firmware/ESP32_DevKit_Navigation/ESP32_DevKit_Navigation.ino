@@ -37,7 +37,7 @@
 #define ULTRASONIC_READ_INTERVAL_MS 500
 
 // Automatic forward checkpoint settings
-#define CHECKPOINT_MOVE_SECONDS 3
+#define CHECKPOINT_MOVE_SECONDS 4
 #define CHECKPOINT_PAUSE_SECONDS 2
 
 HardwareSerial NanoSerial(1);
@@ -500,25 +500,28 @@ bool loadFromFlash() {
 }
 
 void runForwardWithCheckpoints(unsigned long totalMoveTime) {
-  unsigned long remainingMoveTime = totalMoveTime;
+  unsigned long movementElapsed = 0;
+  unsigned long nextCheckpoint = min(
+    totalMoveTime,
+    (unsigned long)CHECKPOINT_MOVE_SECONDS * 1000UL
+  );
 
-  while (automaticMode && remainingMoveTime > 0) {
-    unsigned long moveChunk = min(
-      remainingMoveTime,
-      (unsigned long)CHECKPOINT_MOVE_SECONDS * 1000UL
-    );
-
-    unsigned long movedTime = 0;
-    unsigned long lastMoveCheck = millis();
-
+  while (automaticMode && movementElapsed < totalMoveTime) {
     currentState = 'F';
     forward();
 
-    Serial.print("FORWARD CHECKPOINT: moving for ");
-    Serial.print(moveChunk / 1000UL);
+    Serial.print("FORWARD MOVEMENT: ");
+    Serial.print(movementElapsed / 1000UL);
+    Serial.print(" to ");
+    Serial.print(nextCheckpoint / 1000UL);
     Serial.println(" seconds");
 
-    while (automaticMode && movedTime < moveChunk) {
+    unsigned long lastMoveCheck = millis();
+
+    // Move only until the next checkpoint or the end of the stored duration.
+    while (automaticMode &&
+           movementElapsed < totalMoveTime &&
+           movementElapsed < nextCheckpoint) {
       readHeadingCorrection();
       readBluetooth();
 
@@ -552,13 +555,13 @@ void runForwardWithCheckpoints(unsigned long totalMoveTime) {
       lastMoveCheck = now;
 
       if (obstacle) {
-        // Robot is stopped, so stored movement time does NOT decrease.
+        // Robot is stopped, so obstacle time is NOT counted.
         stopMotor();
       } else {
         applyDrive();
 
         // Count only actual forward movement time.
-        movedTime += elapsed;
+        movementElapsed += elapsed;
       }
 
       delay(5);
@@ -570,36 +573,45 @@ void runForwardWithCheckpoints(unsigned long totalMoveTime) {
       return;
     }
 
-    if (movedTime > moveChunk) {
-      movedTime = moveChunk;
+    // Stored forward duration is complete. Do not add a checkpoint pause.
+    if (movementElapsed >= totalMoveTime) {
+      break;
     }
 
-    remainingMoveTime -= movedTime;
+    // Checkpoint reached: stop for 2 seconds.
+    Serial.print("CHECKPOINT REACHED AT ");
+    Serial.print(movementElapsed / 1000UL);
+    Serial.println(" seconds. Waiting for 2 seconds");
 
-    if (remainingMoveTime > 0) {
-      Serial.print("CHECKPOINT REACHED. Waiting for ");
-      Serial.print(CHECKPOINT_PAUSE_SECONDS);
-      Serial.println(" seconds");
+    currentState = 'S';
+    stopMotor();
 
-      currentState = 'S';
-      stopMotor();
+    unsigned long pauseStart = millis();
 
-      unsigned long pauseStart = millis();
+    while (automaticMode &&
+           millis() - pauseStart <
+           (unsigned long)CHECKPOINT_PAUSE_SECONDS * 1000UL) {
+      readHeadingCorrection();
+      readBluetooth();
 
-      while (automaticMode &&
-             millis() - pauseStart <
-             (unsigned long)CHECKPOINT_PAUSE_SECONDS * 1000UL) {
-        readHeadingCorrection();
-        readBluetooth();
+      updateUltrasonicReadings();
 
-        updateUltrasonicReadings();
+      bool obstacle = frontObstacleDetected();
+      updateObstacleIndicators(obstacle);
 
-        bool obstacle = frontObstacleDetected();
-        updateObstacleIndicators(obstacle);
+      // Pause time is NOT counted in movementElapsed.
+      delay(5);
+    }
 
-        // Stored forward movement time is not counted during this pause.
-        delay(5);
-      }
+    if (!automaticMode) {
+      return;
+    }
+
+    // Continue counting from the previous movement time.
+    nextCheckpoint += (unsigned long)CHECKPOINT_MOVE_SECONDS * 1000UL;
+
+    if (nextCheckpoint > totalMoveTime) {
+      nextCheckpoint = totalMoveTime;
     }
   }
 
