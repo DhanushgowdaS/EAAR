@@ -267,7 +267,7 @@ void readBluetoothTerminal() {
     }
 
     if (bluetoothCommandIndex == 0 && isNavigationCommand(c)) {
-      bluetoothCommandBuffer[bluetoothCommandIndex++] = c;
+      processCommandText((char[]){(char)toupper(c), '\\0'});
       lastBluetoothByteTime = millis();
       continue;
     }
