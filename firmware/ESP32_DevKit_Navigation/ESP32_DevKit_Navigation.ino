@@ -25,7 +25,7 @@
 #define ULTRASONIC_A_TRIG 18
 #define ULTRASONIC_A_ECHO 5
 #define ULTRASONIC_B_TRIG 12
-#define ULTRASONIC_B_ECHO 14
+#define ULTRASONIC_B_ECHO 34
 
 #define OBSTACLE_LED_1 13
 #define OBSTACLE_LED_2 15
@@ -122,7 +122,7 @@ void setup() {
   Serial.println("HC-05: RX16/TX17 @ 9600");
   Serial.println("Nano:  RX27/TX19 @ 9600");
   Serial.println("Ultrasonic A: TRIG18 ECHO5");
-  Serial.println("Ultrasonic B: TRIG12 ECHO14");
+  Serial.println("Ultrasonic B: TRIG12 ECHO34");
   Serial.println("================================");
 }
 
