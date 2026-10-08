@@ -31,11 +31,7 @@
 #define OBSTACLE_LED_2 15
 
 #define OBSTACLE_DISTANCE_CM 20.0
-#define SIMILAR_DISTANCE_CM 5.0
-#define OBSTACLE_TURN_TIME_MS 200
 #define ULTRASONIC_TIMEOUT_US 25000
-#define OBSTACLE_CONFIRM_COUNT 3
-#define OBSTACLE_CLEAR_COUNT 2
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -57,20 +53,11 @@ unsigned long stateStartTime = 0;
 
 bool recording = false;
 bool automaticMode = false;
-bool obstacleCorrection = false;
-char obstacleTurnDirection = 'N';
-unsigned long obstacleTurnStart = 0;
 unsigned long lastObstacleBlink = 0;
 bool obstacleBlinkState = false;
 bool obstacleDetectedState = false;
 float ultrasonicDistanceA = -1.0;
 float ultrasonicDistanceB = -1.0;
-int obstacleAConfirmCount = 0;
-int obstacleBConfirmCount = 0;
-int obstacleAClearCount = 0;
-int obstacleBClearCount = 0;
-bool stableObstacleA = false;
-bool stableObstacleB = false;
 
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
@@ -219,137 +206,25 @@ void updateObstacleBlink() {
   }
 }
 void handleObstacle() {
-  updateObstacleBlink();
+  bool obstacleA = ultrasonicDistanceA >= 0 &&
+                   ultrasonicDistanceA < OBSTACLE_DISTANCE_CM;
+  bool obstacleB = ultrasonicDistanceB >= 0 &&
+                   ultrasonicDistanceB < OBSTACLE_DISTANCE_CM;
 
-  float distanceA = ultrasonicDistanceA;
-  float distanceB = ultrasonicDistanceB;
+  obstacleDetectedState = obstacleA || obstacleB;
 
-  bool rawObstacleA = distanceA >= 0 && distanceA < OBSTACLE_DISTANCE_CM;
-  bool rawObstacleB = distanceB >= 0 && distanceB < OBSTACLE_DISTANCE_CM;
-
-  // Require several consecutive readings before declaring an obstacle.
-  // This prevents ultrasonic noise/spikes from triggering the LEDs or turn.
-  if (rawObstacleA) {
-    obstacleAConfirmCount++;
-    obstacleAClearCount = 0;
+  if (obstacleDetectedState) {
+    // Any object below 20 cm: stop the car, blink external LEDs,
+    // and turn the NeoPixel beacon RED. No left/right turning.
+    stopMotor();
+    setObstacleIndicators(true);
+    updateObstacleBlink();
   } else {
-    obstacleAConfirmCount = 0;
-    if (stableObstacleA) {
-      obstacleAClearCount++;
-    } else {
-      obstacleAClearCount = 0;
-    }
+    setObstacleIndicators(false);
+    updateObstacleBlink();
   }
-
-  if (rawObstacleB) {
-    obstacleBConfirmCount++;
-    obstacleBClearCount = 0;
-  } else {
-    obstacleBConfirmCount = 0;
-    if (stableObstacleB) {
-      obstacleBClearCount++;
-    } else {
-      obstacleBClearCount = 0;
-    }
-  }
-
-  if (obstacleAConfirmCount >= OBSTACLE_CONFIRM_COUNT) {
-    stableObstacleA = true;
-  }
-  if (obstacleBConfirmCount >= OBSTACLE_CONFIRM_COUNT) {
-    stableObstacleB = true;
-  }
-
-  if (obstacleAClearCount >= OBSTACLE_CLEAR_COUNT) {
-    stableObstacleA = false;
-  }
-  if (obstacleBClearCount >= OBSTACLE_CLEAR_COUNT) {
-    stableObstacleB = false;
-  }
-
-  bool obstacleA = stableObstacleA;
-  bool obstacleB = stableObstacleB;
-  bool obstacleDetected = obstacleA || obstacleB;
-  obstacleDetectedState = obstacleDetected;
-
-  // Always show the obstacle status, even when the robot is stopped.
-  // Automatic turning is still allowed only while moving forward.
-  if (!obstacleDetected) {
-    if (!obstacleCorrection) {
-      setObstacleIndicators(false);
-    }
-    return;
-  }
-
-  Serial.print("OBSTACLE: A=");
-  if (distanceA < 0) {
-    Serial.print("NO ECHO");
-  } else {
-    Serial.print(distanceA, 1);
-    Serial.print(" cm");
-  }
-
-  Serial.print(", B=");
-  if (distanceB < 0) {
-    Serial.print("NO ECHO");
-  } else {
-    Serial.print(distanceB, 1);
-    Serial.print(" cm");
-  }
-  Serial.println();
-
-  // Obstacle is below 20 cm: NeoPixel RED + external LEDs.
-  setObstacleIndicators(true);
-  updateObstacleBlink();
-
-  if (recording || currentState != 'F') {
-    return;
-  }
-
-  if (obstacleCorrection) {
-    if (millis() - obstacleTurnStart >= OBSTACLE_TURN_TIME_MS) {
-      obstacleCorrection = false;
-      obstacleTurnDirection = 'N';
-      stopMotor();
-      setObstacleIndicators(false);
-    }
-    return;
-  }
-
-  stopMotor();
-
-  obstacleBlinkState = true;
-  digitalWrite(OBSTACLE_LED_1, HIGH);
-  digitalWrite(OBSTACLE_LED_2, HIGH);
-  lastObstacleBlink = millis();
-
-  if (obstacleA && obstacleB) {
-    float difference = distanceA > distanceB
-                        ? distanceA - distanceB
-                        : distanceB - distanceA;
-
-    if (difference <= SIMILAR_DISTANCE_CM) {
-      Serial.println("OBSTACLE: BOTH SIDES BLOCKED - STOP");
-      currentState = 'S';
-      automaticMode = false;
-      obstacleCorrection = false;
-      obstacleTurnDirection = 'N';
-      return;
-    }
-  }
-
-  if (obstacleA && (!obstacleB || distanceA < distanceB)) {
-    obstacleTurnDirection = 'L';
-  } else {
-    obstacleTurnDirection = 'R';
-  }
-
-  Serial.print("OBSTACLE: TURN ");
-  Serial.println(obstacleTurnDirection);
-
-  obstacleCorrection = true;
-  obstacleTurnStart = millis();
 }
+
 void readHeadingCorrection() {
   while (NanoSerial.available()) {
     char c = NanoSerial.read();
@@ -438,8 +313,7 @@ void handleCommand(char command) {
     } else {
       automaticMode = false;
       currentState = 'S';
-      obstacleCorrection = false;
-      obstacleTurnDirection = 'N';
+      obstacleDetectedState = false;
       setObstacleIndicators(false);
       stopMotor();
     }
@@ -467,15 +341,6 @@ void handleCommand(char command) {
 }
 
 void applyDrive() {
-  if (obstacleCorrection) {
-    if (obstacleTurnDirection == 'L') {
-      left();
-    } else if (obstacleTurnDirection == 'R') {
-      right();
-    }
-    return;
-  }
-
   if (currentState != 'F' &&
       currentState != 'B' &&
       currentState != 'L' &&
@@ -692,8 +557,7 @@ void deleteFlash() {
   automaticMode = false;
   routeCount = 0;
   currentState = 'S';
-  obstacleCorrection = false;
-  obstacleTurnDirection = 'N';
+  obstacleDetectedState = false;
   setObstacleIndicators(false);
 
   prefs.remove("count");
