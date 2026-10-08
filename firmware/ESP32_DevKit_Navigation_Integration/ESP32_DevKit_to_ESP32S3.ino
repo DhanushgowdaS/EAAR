@@ -45,6 +45,9 @@
 #define S3_CHECKPOINT_TRIGGER 14
 #define S3_READY_INPUT 21
 
+// DevKit onboard LED for checkpoint trigger indication
+#define CHECKPOINT_DEBUG_LED 2
+
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
 Preferences prefs;
@@ -125,7 +128,9 @@ void setup() {
 
   pinMode(S3_CHECKPOINT_TRIGGER, OUTPUT);
   pinMode(S3_READY_INPUT, INPUT_PULLDOWN);
+  pinMode(CHECKPOINT_DEBUG_LED, OUTPUT);
   digitalWrite(S3_CHECKPOINT_TRIGGER, LOW);
+  digitalWrite(CHECKPOINT_DEBUG_LED, LOW);
 
   digitalWrite(ULTRASONIC_A_TRIG, LOW);
   digitalWrite(ULTRASONIC_B_TRIG, LOW);
@@ -155,6 +160,7 @@ void setup() {
   Serial.println("D = Delete Route");
   Serial.println("S3 Trigger: GPIO14 -> S3 GPIO7");
   Serial.println("S3 Ready: S3 GPIO10 -> GPIO21");
+  Serial.println("Checkpoint Debug LED: GPIO2");
   Serial.println("HC-05: RX16/TX17 @ 9600");
   Serial.println("Nano:  RX27/TX19 @ 9600");
   Serial.println("Ultrasonic A: TRIG18 ECHO5");
@@ -671,9 +677,18 @@ void runForwardWithCheckpoints(unsigned long totalMoveTime) {
     stopMotor();
 
     // Send a short checkpoint trigger pulse to the ESP32-S3.
+    // DevKit GPIO14 -> S3 GPIO7.
+    Serial.println("S3 TRIGGER: GPIO14 HIGH -> GPIO7");
+    digitalWrite(CHECKPOINT_DEBUG_LED, HIGH);
     digitalWrite(S3_CHECKPOINT_TRIGGER, HIGH);
     delay(100);
     digitalWrite(S3_CHECKPOINT_TRIGGER, LOW);
+    Serial.println("S3 TRIGGER: GPIO14 LOW (100 ms pulse SENT)");
+
+    // Keep the DevKit LED on briefly so the trigger can be seen physically.
+    delay(900);
+    digitalWrite(CHECKPOINT_DEBUG_LED, LOW);
+    Serial.println("CHECKPOINT DEBUG LED: OFF");
 
     // Wait indefinitely for the ESP32-S3 READY signal.
     // This wait time is outside the stored movement duration.
