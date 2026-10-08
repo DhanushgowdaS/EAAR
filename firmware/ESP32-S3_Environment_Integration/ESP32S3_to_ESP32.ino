@@ -392,6 +392,14 @@ void loop() {
   bleUpFlag = false;
   bleDownFlag = false;
 
+  if (navCheckpointEdge) {
+    Serial.println("NAV CHECKPOINT TRIGGER RECEIVED on GPIO7");
+
+    if (state != STATE_UP) {
+      Serial.println("NAV CHECKPOINT TRIGGER IGNORED: S3 not in UP state");
+    }
+  }
+
   if (state == STATE_UP && navCheckpointEdge) {
     Serial.println("NAV CHECKPOINT: PROBE DOWN");
 
