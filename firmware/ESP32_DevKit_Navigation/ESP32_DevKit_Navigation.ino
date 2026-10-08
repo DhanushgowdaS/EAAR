@@ -60,6 +60,7 @@ char obstacleTurnDirection = 'N';
 unsigned long obstacleTurnStart = 0;
 unsigned long lastObstacleBlink = 0;
 bool obstacleBlinkState = false;
+unsigned long lastUltrasonicPrint = 0;
 
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
@@ -128,8 +129,26 @@ void setup() {
 void loop() {
   readHeadingCorrection();
   readBluetooth();
+  printUltrasonicDistances();
   handleObstacle();
   applyDrive();
+}
+
+void printUltrasonicDistances() {
+  if (millis() - lastUltrasonicPrint < 1000) {
+    return;
+  }
+
+  lastUltrasonicPrint = millis();
+
+  float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
+  float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
+
+  Serial.print("ULTRASONIC A = ");
+  Serial.print(distanceA, 1);
+  Serial.print(" cm | B = ");
+  Serial.print(distanceB, 1);
+  Serial.println(" cm");
 }
 
 float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
