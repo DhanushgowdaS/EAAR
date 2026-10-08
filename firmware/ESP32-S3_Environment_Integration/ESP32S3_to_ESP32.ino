@@ -72,7 +72,7 @@ State state = STATE_UP;
 
 bool lastUpTrig = LOW;
 bool lastDownTrig = LOW;
-bool lastNavCheckpointTrig = LOW;
+volatile bool navCheckpointReceived = false;
 bool navigationCycle = false;
 char triggerStatus = '-';
 
@@ -102,6 +102,10 @@ const char* stateText[] = {
 #define CHARACTERISTIC_UUID "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 
 BLECharacteristic* pRxChar;
+
+void IRAM_ATTR onNavCheckpointTrigger() {
+  navCheckpointReceived = true;
+}
 
 volatile bool bleUpFlag = false;
 volatile bool bleDownFlag = false;
@@ -339,6 +343,8 @@ void setup() {
   pinMode(PULL_DOWN_TRIG, INPUT_PULLDOWN);
 
   pinMode(NAV_CHECKPOINT_TRIG, INPUT_PULLDOWN);
+  attachInterrupt(digitalPinToInterrupt(NAV_CHECKPOINT_TRIG), onNavCheckpointTrigger, RISING);
+
   pinMode(NAV_READY_TRIG, OUTPUT);
   digitalWrite(NAV_READY_TRIG, LOW);
 
@@ -396,9 +402,14 @@ void loop() {
     (downTrig == HIGH && lastDownTrig == LOW) ||
     bleDownFlag;
 
-  bool navCheckpointTrig = digitalRead(NAV_CHECKPOINT_TRIG);
-  bool navCheckpointEdge =
-    (navCheckpointTrig == HIGH && lastNavCheckpointTrig == LOW);
+  // GPIO7 is interrupt-driven so the short DevKit trigger cannot be missed.
+  bool navCheckpointEdge = false;
+  noInterrupts();
+  if (navCheckpointReceived) {
+    navCheckpointReceived = false;
+    navCheckpointEdge = true;
+  }
+  interrupts();
 
   bleUpFlag = false;
   bleDownFlag = false;
@@ -499,7 +510,6 @@ void loop() {
 
   lastUpTrig = upTrig;
   lastDownTrig = downTrig;
-  lastNavCheckpointTrig = navCheckpointTrig;
 
   // ---- LCD ----
   if (now - lastLcdUpdate >= LCD_INTERVAL) {
