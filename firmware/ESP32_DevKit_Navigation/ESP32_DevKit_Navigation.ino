@@ -1,4 +1,5 @@
 #include <Preferences.h>
+#include <Adafruit_NeoPixel.h>
 
 #define ENA 25
 #define ENB 26
@@ -16,10 +17,14 @@
 #define CORR_AMOUNT 40
 #define CORR_TIMEOUT_MS 200
 #define MAX_RECORDS 100
+#define LED_PIN 4
+#define LED_COUNT 8
+#define LED_BRIGHTNESS 255
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
 Preferences prefs;
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 struct RouteRecord {
   char command;
@@ -59,6 +64,11 @@ void setup() {
   pinMode(IN4, OUTPUT);
 
   stopMotor();
+
+  strip.begin();
+  strip.setBrightness(LED_BRIGHTNESS);
+  strip.fill(strip.Color(0, 255, 255));
+  strip.show();
 
   prefs.begin("agribot", false);
 
