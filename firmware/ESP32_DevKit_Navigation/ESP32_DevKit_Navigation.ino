@@ -167,7 +167,7 @@ void processLightingCommand(const char *command) {
   } else if (strcmp(command, "WARM") == 0) {
     setColor(255, 100, 20);
   } else if (strcmp(command, "MAROON") == 0) {
-    setColor(0, 255, 255);
+    setColor(80, 0, 20);
   } else if (strcmp(command, "PEACOCK") == 0) {
     setColor(0, 180, 180);
   } else if (strcmp(command, "OFF") == 0) {
@@ -307,7 +307,7 @@ void setup() {
 
   strip.begin();
   strip.setBrightness(LED_BRIGHTNESS);
-  setColor(80, 0, 20);
+  setColor(0, 255, 255);
 
   prefs.begin("agribot", false);
 
