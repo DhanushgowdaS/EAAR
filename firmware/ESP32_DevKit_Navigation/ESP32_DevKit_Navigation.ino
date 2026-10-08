@@ -60,6 +60,8 @@ unsigned long stateStartTime = 0;
 
 bool recording = false;
 bool automaticMode = false;
+bool obstaclePausedRecording = false;
+unsigned long obstaclePauseStartTime = 0;
 float ultrasonicDistanceA = -1.0;
 float ultrasonicDistanceB = -1.0;
 
@@ -69,6 +71,28 @@ bool isNavigationCommand(char command) {
          command == 'S' || command == 'T' ||
          command == 'E' || command == 'M' ||
          command == 'A' || command == 'D';
+}
+
+void handleTrainingCommand(char phase) {
+  if (phase == 'A') {
+    startRecording();
+    Serial.println("GOING TRAINING STARTED (TA)");
+  } else if (phase == 'B') {
+    if (!recording) {
+      Serial.println("START GOING TRAINING FIRST");
+      return;
+    }
+
+    if (currentState != 'S') {
+      recordCurrentState();
+    }
+
+    currentState = 'S';
+    stateStartTime = millis();
+    obstaclePausedRecording = false;
+
+    Serial.println("COMING-BACK TRAINING STARTED (TB)");
+  }
 }
 
 void setup() {
@@ -164,6 +188,25 @@ void loop() {
     Serial.println(obstacle ? "YES" : "NO");
 
     updateObstacleIndicators(obstacle);
+
+    // During GOING/COMING-BACK training, obstacle waiting time is not recorded.
+    if (recording && (currentState == 'F' || currentState == 'B')) {
+      if (obstacle && !obstaclePausedRecording) {
+        obstaclePausedRecording = true;
+        obstaclePauseStartTime = millis();
+        stopMotor();
+      } else if (!obstacle && obstaclePausedRecording) {
+        unsigned long pausedTime = millis() - obstaclePauseStartTime;
+        stateStartTime += pausedTime;
+        obstaclePausedRecording = false;
+
+        if (currentState == 'F') {
+          forward();
+        } else if (currentState == 'B') {
+          backward();
+        }
+      }
+    }
   }
 
   applyDrive();
@@ -235,6 +278,8 @@ void readHeadingCorrection() {
 }
 
 void readBluetooth() {
+  static bool pendingT = false;
+
   while (HC05Serial.available()) {
     char command = HC05Serial.read();
 
@@ -242,18 +287,36 @@ void readBluetooth() {
       continue;
     }
 
-    if (isNavigationCommand(command) ||
-        command == 'f' || command == 'b' ||
-        command == 'l' || command == 'r' ||
-        command == 's' || command == 't' ||
-        command == 'e' || command == 'm' ||
-        command == 'a' || command == 'd') {
+    command = toupper(command);
 
-      command = toupper(command);
+    if (pendingT) {
+      pendingT = false;
+
+      if (command == 'A' || command == 'B') {
+        Serial.print("BT CMD: T");
+        Serial.println(command);
+        handleTrainingCommand(command);
+        continue;
+      }
+
+      Serial.println("BT CMD: T");
+      handleCommand('T');
+    }
+
+    if (command == 'T') {
+      pendingT = true;
+      continue;
+    }
+
+    if (isNavigationCommand(command) ||
+        command == 'F' || command == 'B' ||
+        command == 'L' || command == 'R' ||
+        command == 'S' || command == 'E' ||
+        command == 'M' || command == 'A' ||
+        command == 'D') {
 
       Serial.print("BT CMD: ");
       Serial.println(command);
-
       handleCommand(command);
     }
   }
@@ -342,9 +405,10 @@ void handleCommand(char command) {
 }
 
 void applyDrive() {
-  // If either ultrasonic sensor is below 20 cm, block FORWARD only.
-  // Left, right, and backward movement remain available.
-  if (currentState == 'F' && frontObstacleDetected()) {
+  // If either ultrasonic sensor detects an obstacle, block
+  // FORWARD and BACKWARD. Left and right remain available.
+  if ((currentState == 'F' || currentState == 'B') &&
+      frontObstacleDetected()) {
     stopMotor();
     return;
   }
@@ -407,6 +471,7 @@ void startRecording() {
   currentState = 'S';
   recording = true;
   automaticMode = false;
+  obstaclePausedRecording = false;
   stateStartTime = millis();
 
   Serial.println("TRAINING STARTED");
@@ -440,8 +505,14 @@ void recordCurrentState() {
     return;
   }
 
+  unsigned long elapsed = millis() - stateStartTime;
+
+  if (obstaclePausedRecording) {
+    elapsed = obstaclePauseStartTime - stateStartTime;
+  }
+
   route[routeCount].command = currentState;
-  route[routeCount].duration = millis() - stateStartTime;
+  route[routeCount].duration = elapsed;
   routeCount++;
 }
 
@@ -455,6 +526,7 @@ void endRecording() {
 
   stopMotor();
   recording = false;
+  obstaclePausedRecording = false;
   currentState = 'S';
   stateStartTime = millis();
 
