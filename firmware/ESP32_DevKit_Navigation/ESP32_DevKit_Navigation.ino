@@ -33,7 +33,6 @@
 #define OBSTACLE_LED_2 15
 
 #define OBSTACLE_DISTANCE_CM 20.0
-#define ULTRASONIC_TIMEOUT_US 25000
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -127,6 +126,7 @@ void loop() {
   readHeadingCorrection();
   readBluetooth();
   updateUltrasonicReadings();
+  updateObstacleLights();
   applyDrive();
 }
 
@@ -143,7 +143,7 @@ float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
 
-  unsigned long duration = pulseIn(echoPin, HIGH, ULTRASONIC_TIMEOUT_US);
+  unsigned long duration = pulseIn(echoPin, HIGH);
 
   if (duration == 0) {
     return -1.0;
@@ -153,13 +153,33 @@ float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
 }
 
 bool frontObstacleDetected() {
-  bool obstacleA = ultrasonicDistanceA >= 0 &&
-                   ultrasonicDistanceA < OBSTACLE_DISTANCE_CM;
+  return (ultrasonicDistanceA >= 0 &&
+          ultrasonicDistanceA < OBSTACLE_DISTANCE_CM) ||
+         (ultrasonicDistanceB >= 0 &&
+          ultrasonicDistanceB < OBSTACLE_DISTANCE_CM);
+}
 
-  bool obstacleB = ultrasonicDistanceB >= 0 &&
-                   ultrasonicDistanceB < OBSTACLE_DISTANCE_CM;
+void updateObstacleLights() {
+  if (frontObstacleDetected()) {
+    stopMotor();
 
-  return obstacleA || obstacleB;
+    strip.fill(strip.Color(255, 0, 0));
+    strip.show();
+
+    digitalWrite(OBSTACLE_LED_1, HIGH);
+    digitalWrite(OBSTACLE_LED_2, HIGH);
+    delay(250);
+
+    digitalWrite(OBSTACLE_LED_1, LOW);
+    digitalWrite(OBSTACLE_LED_2, LOW);
+    delay(250);
+  } else {
+    strip.fill(strip.Color(0, 255, 255));
+    strip.show();
+
+    digitalWrite(OBSTACLE_LED_1, LOW);
+    digitalWrite(OBSTACLE_LED_2, LOW);
+  }
 }
 
 void readHeadingCorrection() {
@@ -479,6 +499,7 @@ void startAutomatic() {
       readHeadingCorrection();
       readBluetooth();
       updateUltrasonicReadings();
+      updateObstacleLights();
       applyDrive();
       delay(5);
     }
