@@ -61,7 +61,9 @@ unsigned long obstacleTurnStart = 0;
 unsigned long lastObstacleBlink = 0;
 bool obstacleBlinkState = false;
 bool obstacleDetectedState = false;
-unsigned long lastUltrasonicPrint = 0;
+unsigned long lastUltrasonicRead = 0;
+float ultrasonicDistanceA = -1.0;
+float ultrasonicDistanceB = -1.0;
 
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
@@ -130,36 +132,40 @@ void setup() {
 void loop() {
   readHeadingCorrection();
   readBluetooth();
+  updateUltrasonicReadings();
   printUltrasonicDistances();
   handleObstacle();
   applyDrive();
 }
 
-void printUltrasonicDistances() {
-  if (millis() - lastUltrasonicPrint < 1000) {
+void updateUltrasonicReadings() {
+  if (millis() - lastUltrasonicRead < 50) {
     return;
   }
 
-  lastUltrasonicPrint = millis();
+  lastUltrasonicRead = millis();
 
-  float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
-  delay(50);
-  float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
+  // Read both sensors at the same fixed 50 ms update rate.
+  ultrasonicDistanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
+  ultrasonicDistanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
+}
 
+void printUltrasonicDistances() {
   Serial.print("ULTRASONIC A = ");
-  if (distanceA < 0) {
+
+  if (ultrasonicDistanceA < 0) {
     Serial.print("NO ECHO");
   } else {
-    Serial.print(distanceA, 1);
+    Serial.print(ultrasonicDistanceA, 1);
     Serial.print(" cm");
   }
 
   Serial.print(" | B = ");
 
-  if (distanceB < 0) {
+  if (ultrasonicDistanceB < 0) {
     Serial.print("NO ECHO");
   } else {
-    Serial.print(distanceB, 1);
+    Serial.print(ultrasonicDistanceB, 1);
     Serial.print(" cm");
   }
 
@@ -212,9 +218,8 @@ void updateObstacleBlink() {
 void handleObstacle() {
   updateObstacleBlink();
 
-  float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
-  delay(50);
-  float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
+  float distanceA = ultrasonicDistanceA;
+  float distanceB = ultrasonicDistanceB;
 
   bool obstacleA = distanceA >= 0 && distanceA < OBSTACLE_DISTANCE_CM;
   bool obstacleB = distanceB >= 0 && distanceB < OBSTACLE_DISTANCE_CM;
@@ -615,6 +620,7 @@ void startAutomatic() {
     while (automaticMode && millis() - startTime < duration) {
       readHeadingCorrection();
       readBluetooth();
+      updateUltrasonicReadings();
       handleObstacle();
       applyDrive();
       delay(5);
