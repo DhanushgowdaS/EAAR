@@ -36,6 +36,10 @@
 #define ULTRASONIC_READ_TIMEOUT_US 30000
 #define ULTRASONIC_READ_INTERVAL_MS 500
 
+// Automatic forward checkpoint settings
+#define CHECKPOINT_MOVE_SECONDS 3
+#define CHECKPOINT_PAUSE_SECONDS 2
+
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
 Preferences prefs;
@@ -495,6 +499,113 @@ bool loadFromFlash() {
   return true;
 }
 
+void runForwardWithCheckpoints(unsigned long totalMoveTime) {
+  unsigned long remainingMoveTime = totalMoveTime;
+
+  while (automaticMode && remainingMoveTime > 0) {
+    unsigned long moveChunk = min(
+      remainingMoveTime,
+      (unsigned long)CHECKPOINT_MOVE_SECONDS * 1000UL
+    );
+
+    unsigned long movedTime = 0;
+    unsigned long lastMoveCheck = millis();
+
+    currentState = 'F';
+    forward();
+
+    Serial.print("FORWARD CHECKPOINT: moving for ");
+    Serial.print(moveChunk / 1000UL);
+    Serial.println(" seconds");
+
+    while (automaticMode && movedTime < moveChunk) {
+      readHeadingCorrection();
+      readBluetooth();
+
+      updateUltrasonicReadings();
+
+      bool obstacle = frontObstacleDetected();
+
+      Serial.print("Ultrasonic A: ");
+      if (ultrasonicDistanceA < 0) {
+        Serial.print("NO ECHO");
+      } else {
+        Serial.print(ultrasonicDistanceA, 1);
+        Serial.print(" cm");
+      }
+
+      Serial.print(" | B: ");
+      if (ultrasonicDistanceB < 0) {
+        Serial.print("NO ECHO");
+      } else {
+        Serial.print(ultrasonicDistanceB, 1);
+        Serial.print(" cm");
+      }
+
+      Serial.print(" | Obstacle: ");
+      Serial.println(obstacle ? "YES" : "NO");
+
+      updateObstacleIndicators(obstacle);
+
+      unsigned long now = millis();
+      unsigned long elapsed = now - lastMoveCheck;
+      lastMoveCheck = now;
+
+      if (obstacle) {
+        // Robot is stopped, so stored movement time does NOT decrease.
+        stopMotor();
+      } else {
+        applyDrive();
+
+        // Count only actual forward movement time.
+        movedTime += elapsed;
+      }
+
+      delay(5);
+    }
+
+    stopMotor();
+
+    if (!automaticMode) {
+      return;
+    }
+
+    if (movedTime > moveChunk) {
+      movedTime = moveChunk;
+    }
+
+    remainingMoveTime -= movedTime;
+
+    if (remainingMoveTime > 0) {
+      Serial.print("CHECKPOINT REACHED. Waiting for ");
+      Serial.print(CHECKPOINT_PAUSE_SECONDS);
+      Serial.println(" seconds");
+
+      currentState = 'S';
+      stopMotor();
+
+      unsigned long pauseStart = millis();
+
+      while (automaticMode &&
+             millis() - pauseStart <
+             (unsigned long)CHECKPOINT_PAUSE_SECONDS * 1000UL) {
+        readHeadingCorrection();
+        readBluetooth();
+
+        updateUltrasonicReadings();
+
+        bool obstacle = frontObstacleDetected();
+        updateObstacleIndicators(obstacle);
+
+        // Stored forward movement time is not counted during this pause.
+        delay(5);
+      }
+    }
+  }
+
+  stopMotor();
+}
+
 void startAutomatic() {
   if (recording) {
     Serial.println("END TRAINING FIRST");
@@ -515,53 +626,59 @@ void startAutomatic() {
   for (int i = 0; i < routeCount && automaticMode; i++) {
     char command = route[i].command;
     unsigned long duration = route[i].duration;
-    unsigned long startTime = millis();
-
-    currentState = command;
 
     if (command == 'F') {
-      forward();
-    } else if (command == 'B') {
-      backward();
-    } else if (command == 'L') {
-      left();
-    } else if (command == 'R') {
-      right();
+      runForwardWithCheckpoints(duration);
     } else {
-      currentState = 'S';
+      currentState = command;
+
+      if (command == 'B') {
+        backward();
+      } else if (command == 'L') {
+        left();
+      } else if (command == 'R') {
+        right();
+      } else {
+        currentState = 'S';
+        stopMotor();
+      }
+
+      unsigned long startTime = millis();
+
+      while (automaticMode && millis() - startTime < duration) {
+        readHeadingCorrection();
+        readBluetooth();
+
+        updateUltrasonicReadings();
+
+        bool obstacle = frontObstacleDetected();
+
+        Serial.print("Ultrasonic A: ");
+        if (ultrasonicDistanceA < 0) {
+          Serial.print("NO ECHO");
+        } else {
+          Serial.print(ultrasonicDistanceA, 1);
+          Serial.print(" cm");
+        }
+
+        Serial.print(" | B: ");
+        if (ultrasonicDistanceB < 0) {
+          Serial.print("NO ECHO");
+        } else {
+          Serial.print(ultrasonicDistanceB, 1);
+          Serial.print(" cm");
+        }
+
+        Serial.print(" | Obstacle: ");
+        Serial.println(obstacle ? "YES" : "NO");
+
+        updateObstacleIndicators(obstacle);
+        applyDrive();
+        delay(5);
+      }
+
       stopMotor();
     }
-
-    while (automaticMode && millis() - startTime < duration) {
-      readHeadingCorrection();
-      readBluetooth();
-      updateUltrasonicReadings();
-
-      bool obstacle = frontObstacleDetected();
-
-      Serial.print("Ultrasonic A: ");
-      if (ultrasonicDistanceA < 0) Serial.print("NO ECHO");
-      else {
-        Serial.print(ultrasonicDistanceA, 1);
-        Serial.print(" cm");
-      }
-
-      Serial.print(" | B: ");
-      if (ultrasonicDistanceB < 0) Serial.print("NO ECHO");
-      else {
-        Serial.print(ultrasonicDistanceB, 1);
-        Serial.print(" cm");
-      }
-
-      Serial.print(" | Obstacle: ");
-      Serial.println(obstacle ? "YES" : "NO");
-
-      updateObstacleIndicators(obstacle);
-      applyDrive();
-      delay(5);
-    }
-
-    stopMotor();
   }
 
   automaticMode = false;
