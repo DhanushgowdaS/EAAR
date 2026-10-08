@@ -34,6 +34,7 @@
 
 #define OBSTACLE_DISTANCE_CM 20.0
 #define ULTRASONIC_READ_TIMEOUT_US 30000
+#define ULTRASONIC_READ_INTERVAL_MS 500
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -127,33 +128,40 @@ void loop() {
   readHeadingCorrection();
   readBluetooth();
 
-  updateUltrasonicReadings();
+  static unsigned long lastUltrasonicRead = 0;
 
-  // ONLY condition:
+  if (millis() - lastUltrasonicRead >= ULTRASONIC_READ_INTERVAL_MS) {
+    lastUltrasonicRead = millis();
+
+    updateUltrasonicReadings();
+
+    // ONLY condition:
   // A < 20 cm OR B < 20 cm = block forward + RED NeoPixel + blinking LEDs.
   // Otherwise = normal operation + CYAN NeoPixel + LEDs OFF.
-  bool obstacle = frontObstacleDetected();
+    bool obstacle = frontObstacleDetected();
 
-  Serial.print("Ultrasonic A: ");
-  if (ultrasonicDistanceA < 0) {
-    Serial.print("NO ECHO");
-  } else {
-    Serial.print(ultrasonicDistanceA, 1);
-    Serial.print(" cm");
+    Serial.print("Ultrasonic A: ");
+    if (ultrasonicDistanceA < 0) {
+      Serial.print("NO ECHO");
+    } else {
+      Serial.print(ultrasonicDistanceA, 1);
+      Serial.print(" cm");
+    }
+
+    Serial.print(" | B: ");
+    if (ultrasonicDistanceB < 0) {
+      Serial.print("NO ECHO");
+    } else {
+      Serial.print(ultrasonicDistanceB, 1);
+      Serial.print(" cm");
+    }
+
+    Serial.print(" | Obstacle: ");
+    Serial.println(obstacle ? "YES" : "NO");
+
+    updateObstacleIndicators(obstacle);
   }
 
-  Serial.print(" | B: ");
-  if (ultrasonicDistanceB < 0) {
-    Serial.print("NO ECHO");
-  } else {
-    Serial.print(ultrasonicDistanceB, 1);
-    Serial.print(" cm");
-  }
-
-  Serial.print(" | Obstacle: ");
-  Serial.println(obstacle ? "YES" : "NO");
-
-  updateObstacleIndicators(obstacle);
   applyDrive();
 }
 
