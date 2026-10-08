@@ -25,14 +25,14 @@
 #define ULTRASONIC_A_TRIG 18
 #define ULTRASONIC_A_ECHO 5
 #define ULTRASONIC_B_TRIG 12
-#define ULTRASONIC_B_ECHO 14
+#define ULTRASONIC_B_ECHO 34
 
 #define OBSTACLE_LED_1 13
 #define OBSTACLE_LED_2 15
 
 #define OBSTACLE_DISTANCE_CM 20.0
 #define SIMILAR_DISTANCE_CM 5.0
-#define OBSTACLE_TURN_TIME_MS 180
+#define OBSTACLE_TURN_TIME_MS 200
 #define ULTRASONIC_TIMEOUT_US 25000
 
 HardwareSerial NanoSerial(1);
@@ -58,6 +58,8 @@ bool automaticMode = false;
 bool obstacleCorrection = false;
 char obstacleTurnDirection = 'N';
 unsigned long obstacleTurnStart = 0;
+unsigned long lastObstacleBlink = 0;
+bool obstacleBlinkState = false;
 
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
@@ -86,6 +88,7 @@ void setup() {
   pinMode(ULTRASONIC_A_ECHO, INPUT);
   pinMode(ULTRASONIC_B_TRIG, OUTPUT);
   pinMode(ULTRASONIC_B_ECHO, INPUT);
+
   pinMode(OBSTACLE_LED_1, OUTPUT);
   pinMode(OBSTACLE_LED_2, OUTPUT);
 
@@ -117,6 +120,8 @@ void setup() {
   Serial.println("D = Delete Route");
   Serial.println("HC-05: RX16/TX17 @ 9600");
   Serial.println("Nano:  RX27/TX14 @ 9600");
+  Serial.println("Ultrasonic A: TRIG18 ECHO5");
+  Serial.println("Ultrasonic B: TRIG12 ECHO34");
   Serial.println("================================");
 }
 
@@ -126,7 +131,6 @@ void loop() {
   handleObstacle();
   applyDrive();
 }
-
 
 float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
   digitalWrite(trigPin, LOW);
@@ -147,18 +151,32 @@ float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
 void setObstacleIndicators(bool active) {
   if (active) {
     strip.fill(strip.Color(255, 0, 0));
-    digitalWrite(OBSTACLE_LED_1, HIGH);
-    digitalWrite(OBSTACLE_LED_2, HIGH);
+    strip.show();
   } else {
     strip.fill(strip.Color(0, 255, 255));
+    strip.show();
+  }
+}
+
+void updateObstacleBlink() {
+  if (!obstacleCorrection) {
     digitalWrite(OBSTACLE_LED_1, LOW);
     digitalWrite(OBSTACLE_LED_2, LOW);
+    return;
   }
 
-  strip.show();
+  if (millis() - lastObstacleBlink >= 250) {
+    lastObstacleBlink = millis();
+    obstacleBlinkState = !obstacleBlinkState;
+
+    digitalWrite(OBSTACLE_LED_1, obstacleBlinkState ? HIGH : LOW);
+    digitalWrite(OBSTACLE_LED_2, obstacleBlinkState ? HIGH : LOW);
+  }
 }
 
 void handleObstacle() {
+  updateObstacleBlink();
+
   if (recording || currentState != 'F') {
     return;
   }
@@ -168,6 +186,7 @@ void handleObstacle() {
       obstacleCorrection = false;
       obstacleTurnDirection = 'N';
       stopMotor();
+      setObstacleIndicators(false);
     }
     return;
   }
@@ -181,15 +200,35 @@ void handleObstacle() {
     return;
   }
 
+  Serial.print("OBSTACLE: A=");
+  Serial.print(distanceA);
+  Serial.print(" cm, B=");
+  Serial.print(distanceB);
+  Serial.println(" cm");
+
   setObstacleIndicators(true);
   stopMotor();
 
+  obstacleBlinkState = true;
+  digitalWrite(OBSTACLE_LED_1, HIGH);
+  digitalWrite(OBSTACLE_LED_2, HIGH);
+  lastObstacleBlink = millis();
+
   if (distanceA < OBSTACLE_DISTANCE_CM &&
-      distanceB < OBSTACLE_DISTANCE_CM &&
-      fabs(distanceA - distanceB) <= SIMILAR_DISTANCE_CM) {
-    currentState = 'S';
-    automaticMode = false;
-    return;
+      distanceB < OBSTACLE_DISTANCE_CM) {
+
+    float difference = distanceA > distanceB
+                        ? distanceA - distanceB
+                        : distanceB - distanceA;
+
+    if (difference <= SIMILAR_DISTANCE_CM) {
+      Serial.println("OBSTACLE: BOTH SIDES BLOCKED - STOP");
+      currentState = 'S';
+      automaticMode = false;
+      obstacleCorrection = false;
+      obstacleTurnDirection = 'N';
+      return;
+    }
   }
 
   if (distanceA < distanceB) {
@@ -197,6 +236,9 @@ void handleObstacle() {
   } else {
     obstacleTurnDirection = 'R';
   }
+
+  Serial.print("OBSTACLE: TURN ");
+  Serial.println(obstacleTurnDirection);
 
   obstacleCorrection = true;
   obstacleTurnStart = millis();
@@ -292,6 +334,7 @@ void handleCommand(char command) {
       currentState = 'S';
       obstacleCorrection = false;
       obstacleTurnDirection = 'N';
+      setObstacleIndicators(false);
       stopMotor();
     }
     return;
@@ -527,6 +570,9 @@ void startAutomatic() {
 
   automaticMode = false;
   currentState = 'S';
+  setObstacleIndicators(false);
+  digitalWrite(OBSTACLE_LED_1, LOW);
+  digitalWrite(OBSTACLE_LED_2, LOW);
   stopMotor();
 
   Serial.println("AUTOMATIC COMPLETED");
@@ -541,6 +587,7 @@ void deleteFlash() {
   currentState = 'S';
   obstacleCorrection = false;
   obstacleTurnDirection = 'N';
+  setObstacleIndicators(false);
 
   prefs.remove("count");
   prefs.remove("route");
