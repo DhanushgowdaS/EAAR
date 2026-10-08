@@ -25,7 +25,7 @@
 #define ULTRASONIC_A_TRIG 18
 #define ULTRASONIC_A_ECHO 5
 #define ULTRASONIC_B_TRIG 12
-#define ULTRASONIC_B_ECHO 34
+#define ULTRASONIC_B_ECHO 14
 
 #define OBSTACLE_LED_1 13
 #define OBSTACLE_LED_2 15
@@ -122,7 +122,7 @@ void setup() {
   Serial.println("HC-05: RX16/TX17 @ 9600");
   Serial.println("Nano:  RX27/TX14 @ 9600");
   Serial.println("Ultrasonic A: TRIG18 ECHO5");
-  Serial.println("Ultrasonic B: TRIG12 ECHO34");
+  Serial.println("Ultrasonic B: TRIG12 ECHO14");
   Serial.println("================================");
 }
 
@@ -142,18 +142,33 @@ void printUltrasonicDistances() {
   lastUltrasonicPrint = millis();
 
   float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
+  delay(50);
   float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
 
   Serial.print("ULTRASONIC A = ");
-  Serial.print(distanceA, 1);
-  Serial.print(" cm | B = ");
-  Serial.print(distanceB, 1);
-  Serial.println(" cm");
+  if (distanceA < 0) {
+    Serial.print("NO ECHO");
+  } else {
+    Serial.print(distanceA, 1);
+    Serial.print(" cm");
+  }
+
+  Serial.print(" | B = ");
+
+  if (distanceB < 0) {
+    Serial.print("NO ECHO");
+  } else {
+    Serial.print(distanceB, 1);
+    Serial.print(" cm");
+  }
+
+  Serial.println();
 }
 
 float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
+
   digitalWrite(trigPin, HIGH);
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
@@ -161,7 +176,7 @@ float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
   unsigned long duration = pulseIn(echoPin, HIGH, ULTRASONIC_TIMEOUT_US);
 
   if (duration == 0) {
-    return 400.0;
+    return -1.0;
   }
 
   return duration * 0.0343 / 2.0;
@@ -211,6 +226,7 @@ void handleObstacle() {
   }
 
   float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
+  delay(50);
   float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
 
   if (distanceA >= OBSTACLE_DISTANCE_CM &&
