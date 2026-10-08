@@ -33,6 +33,7 @@
 #define OBSTACLE_LED_2 15
 
 #define OBSTACLE_DISTANCE_CM 20.0
+#define ULTRASONIC_READ_TIMEOUT_US 30000
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -125,8 +126,34 @@ void setup() {
 void loop() {
   readHeadingCorrection();
   readBluetooth();
+
   updateUltrasonicReadings();
-  updateObstacleLights();
+
+  // ONLY condition:
+  // A < 20 cm OR B < 20 cm = block forward + RED NeoPixel + blinking LEDs.
+  // Otherwise = normal operation + CYAN NeoPixel + LEDs OFF.
+  bool obstacle = frontObstacleDetected();
+
+  Serial.print("Ultrasonic A: ");
+  if (ultrasonicDistanceA < 0) {
+    Serial.print("NO ECHO");
+  } else {
+    Serial.print(ultrasonicDistanceA, 1);
+    Serial.print(" cm");
+  }
+
+  Serial.print(" | B: ");
+  if (ultrasonicDistanceB < 0) {
+    Serial.print("NO ECHO");
+  } else {
+    Serial.print(ultrasonicDistanceB, 1);
+    Serial.print(" cm");
+  }
+
+  Serial.print(" | Obstacle: ");
+  Serial.println(obstacle ? "YES" : "NO");
+
+  updateObstacleIndicators(obstacle);
   applyDrive();
 }
 
@@ -143,7 +170,7 @@ float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
 
-  unsigned long duration = pulseIn(echoPin, HIGH);
+  unsigned long duration = pulseIn(echoPin, HIGH, ULTRASONIC_READ_TIMEOUT_US);
 
   if (duration == 0) {
     return -1.0;
@@ -159,24 +186,26 @@ bool frontObstacleDetected() {
           ultrasonicDistanceB < OBSTACLE_DISTANCE_CM);
 }
 
-void updateObstacleLights() {
-  if (frontObstacleDetected()) {
-    stopMotor();
+void updateObstacleIndicators(bool obstacle) {
+  static unsigned long lastBlinkTime = 0;
+  static bool ledState = false;
 
+  if (obstacle) {
     strip.fill(strip.Color(255, 0, 0));
     strip.show();
 
-    digitalWrite(OBSTACLE_LED_1, HIGH);
-    digitalWrite(OBSTACLE_LED_2, HIGH);
-    delay(250);
+    if (millis() - lastBlinkTime >= 250) {
+      lastBlinkTime = millis();
+      ledState = !ledState;
 
-    digitalWrite(OBSTACLE_LED_1, LOW);
-    digitalWrite(OBSTACLE_LED_2, LOW);
-    delay(250);
+      digitalWrite(OBSTACLE_LED_1, ledState);
+      digitalWrite(OBSTACLE_LED_2, ledState);
+    }
   } else {
     strip.fill(strip.Color(0, 255, 255));
     strip.show();
 
+    ledState = false;
     digitalWrite(OBSTACLE_LED_1, LOW);
     digitalWrite(OBSTACLE_LED_2, LOW);
   }
@@ -499,7 +528,27 @@ void startAutomatic() {
       readHeadingCorrection();
       readBluetooth();
       updateUltrasonicReadings();
-      updateObstacleLights();
+
+      bool obstacle = frontObstacleDetected();
+
+      Serial.print("Ultrasonic A: ");
+      if (ultrasonicDistanceA < 0) Serial.print("NO ECHO");
+      else {
+        Serial.print(ultrasonicDistanceA, 1);
+        Serial.print(" cm");
+      }
+
+      Serial.print(" | B: ");
+      if (ultrasonicDistanceB < 0) Serial.print("NO ECHO");
+      else {
+        Serial.print(ultrasonicDistanceB, 1);
+        Serial.print(" cm");
+      }
+
+      Serial.print(" | Obstacle: ");
+      Serial.println(obstacle ? "YES" : "NO");
+
+      updateObstacleIndicators(obstacle);
       applyDrive();
       delay(5);
     }
