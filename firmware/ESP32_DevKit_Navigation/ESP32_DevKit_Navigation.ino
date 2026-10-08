@@ -63,6 +63,7 @@ char serialCommandBuffer[24];
 uint8_t serialCommandIndex = 0;
 char bluetoothCommandBuffer[24];
 uint8_t bluetoothCommandIndex = 0;
+unsigned long lastBluetoothByteTime = 0;
 
 void setColor(uint8_t r, uint8_t g, uint8_t b) {
   solidColor = strip.Color(r, g, b);
@@ -230,6 +231,39 @@ bool isNavigationCommand(char command) {
          command == 'A' || command == 'D';
 }
 
+void readBluetoothTerminal() {
+  while (HC05Serial.available()) {
+    char c = HC05Serial.read();
+
+    if (c == '\r' || c == '\n') {
+      if (bluetoothCommandIndex > 0) {
+        bluetoothCommandBuffer[bluetoothCommandIndex] = '\0';
+        processCommandText(bluetoothCommandBuffer);
+        bluetoothCommandIndex = 0;
+      }
+      lastBluetoothByteTime = millis();
+      continue;
+    }
+
+    if (c == ' ') {
+      continue;
+    }
+
+    if (bluetoothCommandIndex < 23) {
+      bluetoothCommandBuffer[bluetoothCommandIndex++] = c;
+    }
+
+    lastBluetoothByteTime = millis();
+  }
+
+  if (bluetoothCommandIndex > 0 &&
+      millis() - lastBluetoothByteTime >= 50) {
+    bluetoothCommandBuffer[bluetoothCommandIndex] = '\0';
+    processCommandText(bluetoothCommandBuffer);
+    bluetoothCommandIndex = 0;
+  }
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -275,9 +309,8 @@ void setup() {
 
 void loop() {
   readHeadingCorrection();
-  readBluetooth();
+  readBluetoothTerminal();
   readTextCommand(Serial, serialCommandBuffer, serialCommandIndex);
-  readTextCommand(HC05Serial, bluetoothCommandBuffer, bluetoothCommandIndex);
   applyDrive();
   updateLighting();
 }
@@ -289,31 +322,6 @@ void readHeadingCorrection() {
     if (c == 'L' || c == 'R' || c == 'N') {
       lastCorrection = c;
       lastCorrectionTime = millis();
-    }
-  }
-}
-
-void readBluetooth() {
-  while (HC05Serial.available()) {
-    char command = HC05Serial.read();
-
-    if (command == '\r' || command == '\n' || command == ' ') {
-      continue;
-    }
-
-    if (isNavigationCommand(command) ||
-        command == 'f' || command == 'b' ||
-        command == 'l' || command == 'r' ||
-        command == 's' || command == 't' ||
-        command == 'e' || command == 'm' ||
-        command == 'a' || command == 'd') {
-
-      command = toupper(command);
-
-      Serial.print("BT CMD: ");
-      Serial.println(command);
-
-      handleCommand(command);
     }
   }
 }
@@ -585,9 +593,8 @@ void startAutomatic() {
 
     while (automaticMode && millis() - startTime < duration) {
       readHeadingCorrection();
-      readBluetooth();
+      readBluetoothTerminal();
       readTextCommand(Serial, serialCommandBuffer, serialCommandIndex);
-      readTextCommand(HC05Serial, bluetoothCommandBuffer, bluetoothCommandIndex);
       applyDrive();
       updateLighting();
       delay(5);
