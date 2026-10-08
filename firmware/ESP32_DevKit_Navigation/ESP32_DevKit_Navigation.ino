@@ -1,5 +1,4 @@
 #include <Preferences.h>
-#include <Adafruit_NeoPixel.h>
 
 #define ENA 25
 #define ENB 26
@@ -17,12 +16,6 @@
 #define CORR_AMOUNT 40
 #define CORR_TIMEOUT_MS 200
 #define MAX_RECORDS 100
-
-#define LED_PIN 4
-#define LED_COUNT 8
-#define LED_BRIGHTNESS 255
-
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -44,140 +37,12 @@ unsigned long stateStartTime = 0;
 bool recording = false;
 bool automaticMode = false;
 
-uint32_t solidColor = 0;
-
-void setColor(uint8_t r, uint8_t g, uint8_t b) {
-  solidColor = strip.Color(r, g, b);
-  strip.fill(solidColor);
-  strip.show();
-}
-
-void processLightingCommand(const char *command) {
-  if (strcmp(command, "ON") == 0) {
-    setColor(0, 255, 255);
-  } else if (strcmp(command, "OFF") == 0) {
-    setColor(0, 0, 0);
-  }
-}
-
-void processCommandText(char *command) {
-  for (char *p = command; *p; p++) {
-    *p = toupper(*p);
-  }
-
-  if (command[0] == '\\0') {
-    return;
-  }
-
-  if (strcmp(command, "ON") == 0 || strcmp(command, "OFF") == 0) {
-    processLightingCommand(command);
-    return;
-  }
-
-  if (strlen(command) == 1 && isNavigationCommand(command[0])) {
-    handleCommand(command[0]);
-  }
-}
-
-void readTextCommand(Stream &stream, char *buffer, uint8_t &index) {
-  while (stream.available()) {
-    char c = stream.read();
-
-    if (c == '\\r' || c == '\\n') {
-      if (index > 0) {
-        buffer[index] = '\\0';
-        processCommandText(buffer);
-        index = 0;
-      }
-      continue;
-    }
-
-    if (c == ' ') {
-      continue;
-    }
-
-    if (index == 0 && isNavigationCommand(c)) {
-      buffer[index++] = toupper(c);
-      lastSerialByteTime = millis();
-      continue;
-    }
-
-    if (index == 1 && isNavigationCommand(buffer[0]) && toupper(c) == buffer[0]) {
-      processCommandText(buffer);
-      index = 0;
-      buffer[index++] = toupper(c);
-      lastSerialByteTime = millis();
-      continue;
-    }
-
-    if (index < 23) {
-      buffer[index++] = toupper(c);
-    }
-
-    lastSerialByteTime = millis();
-  }
-
-  if (index > 0 && millis() - lastSerialByteTime >= COMMAND_TIMEOUT_MS) {
-    buffer[index] = '\\0';
-    processCommandText(buffer);
-    index = 0;
-  }
-}
-
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
          command == 'L' || command == 'R' ||
          command == 'S' || command == 'T' ||
          command == 'E' || command == 'M' ||
          command == 'A' || command == 'D';
-}
-
-void readBluetoothTerminal() {
-  while (HC05Serial.available()) {
-    char c = HC05Serial.read();
-
-    if (c == '\\r' || c == '\\n') {
-      if (bluetoothCommandIndex > 0) {
-        bluetoothCommandBuffer[bluetoothCommandIndex] = '\\0';
-        processCommandText(bluetoothCommandBuffer);
-        bluetoothCommandIndex = 0;
-      }
-      continue;
-    }
-
-    if (c == ' ') {
-      continue;
-    }
-
-    if (bluetoothCommandIndex == 0 && isNavigationCommand(c)) {
-      bluetoothCommandBuffer[bluetoothCommandIndex++] = toupper(c);
-      lastBluetoothByteTime = millis();
-      continue;
-    }
-
-    if (bluetoothCommandIndex == 1 &&
-        isNavigationCommand(bluetoothCommandBuffer[0]) &&
-        toupper(c) == bluetoothCommandBuffer[0]) {
-      processCommandText(bluetoothCommandBuffer);
-      bluetoothCommandIndex = 0;
-      bluetoothCommandBuffer[bluetoothCommandIndex++] = toupper(c);
-      lastBluetoothByteTime = millis();
-      continue;
-    }
-
-    if (bluetoothCommandIndex < 23) {
-      bluetoothCommandBuffer[bluetoothCommandIndex++] = toupper(c);
-    }
-
-    lastBluetoothByteTime = millis();
-  }
-
-  if (bluetoothCommandIndex > 0 &&
-      millis() - lastBluetoothByteTime >= COMMAND_TIMEOUT_MS) {
-    bluetoothCommandBuffer[bluetoothCommandIndex] = '\\0';
-    processCommandText(bluetoothCommandBuffer);
-    bluetoothCommandIndex = 0;
-  }
 }
 
 void setup() {
@@ -195,10 +60,6 @@ void setup() {
 
   stopMotor();
 
-  strip.begin();
-  strip.setBrightness(LED_BRIGHTNESS);
-  setColor(0, 255, 255);
-
   prefs.begin("agribot", false);
 
   Serial.println();
@@ -215,7 +76,6 @@ void setup() {
   Serial.println("M = Store Route");
   Serial.println("A = Automatic");
   Serial.println("D = Delete Route");
-  Serial.println("LED: ON = CYAN, OFF = OFF");
   Serial.println("HC-05: RX16/TX17 @ 9600");
   Serial.println("Nano:  RX27/TX14 @ 9600");
   Serial.println("================================");
@@ -223,10 +83,8 @@ void setup() {
 
 void loop() {
   readHeadingCorrection();
-  readBluetoothTerminal();
-  readTextCommand(Serial, serialCommandBuffer, serialCommandIndex);
+  readBluetooth();
   applyDrive();
-  updateLighting();
 }
 
 void readHeadingCorrection() {
@@ -236,6 +94,31 @@ void readHeadingCorrection() {
     if (c == 'L' || c == 'R' || c == 'N') {
       lastCorrection = c;
       lastCorrectionTime = millis();
+    }
+  }
+}
+
+void readBluetooth() {
+  while (HC05Serial.available()) {
+    char command = HC05Serial.read();
+
+    if (command == '\r' || command == '\n' || command == ' ') {
+      continue;
+    }
+
+    if (isNavigationCommand(command) ||
+        command == 'f' || command == 'b' ||
+        command == 'l' || command == 'r' ||
+        command == 's' || command == 't' ||
+        command == 'e' || command == 'm' ||
+        command == 'a' || command == 'd') {
+
+      command = toupper(command);
+
+      Serial.print("BT CMD: ");
+      Serial.println(command);
+
+      handleCommand(command);
     }
   }
 }
@@ -507,10 +390,8 @@ void startAutomatic() {
 
     while (automaticMode && millis() - startTime < duration) {
       readHeadingCorrection();
-      readBluetoothTerminal();
-      readTextCommand(Serial, serialCommandBuffer, serialCommandIndex);
+      readBluetooth();
       applyDrive();
-      updateLighting();
       delay(5);
     }
 
