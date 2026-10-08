@@ -8,6 +8,8 @@
 #define IN4 22
 
 #define DEFAULT_SPEED 225
+#define FORWARD_LEFT_SPEED 225
+#define FORWARD_RIGHT_SPEED 215
 #define DEFAULT_TURN_SPEED 255
 #define CORR_AMOUNT 40
 #define CORR_TIMEOUT_MS 200
@@ -209,7 +211,10 @@ void applyDrive() {
   int leftSpeed = DEFAULT_SPEED;
   int rightSpeed = DEFAULT_SPEED;
 
-  if (currentState == 'L' || currentState == 'R') {
+  if (currentState == 'F') {
+    leftSpeed = FORWARD_LEFT_SPEED;
+    rightSpeed = FORWARD_RIGHT_SPEED;
+  } else if (currentState == 'L' || currentState == 'R') {
     leftSpeed = DEFAULT_TURN_SPEED;
     rightSpeed = DEFAULT_TURN_SPEED;
   }
@@ -232,9 +237,9 @@ void applyDrive() {
     }
 
     if (correction == 'L') {
-      leftSpeed = max(0, DEFAULT_SPEED - CORR_AMOUNT);
+      leftSpeed = max(0, leftSpeed - CORR_AMOUNT);
     } else if (correction == 'R') {
-      rightSpeed = max(0, DEFAULT_SPEED - CORR_AMOUNT);
+      rightSpeed = max(0, rightSpeed - CORR_AMOUNT);
     }
   }
 
