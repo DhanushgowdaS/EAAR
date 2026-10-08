@@ -211,6 +211,43 @@ void updateObstacleBlink() {
 void handleObstacle() {
   updateObstacleBlink();
 
+  float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
+  delay(50);
+  float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
+
+  bool obstacleA = distanceA >= 0 && distanceA < OBSTACLE_DISTANCE_CM;
+  bool obstacleB = distanceB >= 0 && distanceB < OBSTACLE_DISTANCE_CM;
+  bool obstacleDetected = obstacleA || obstacleB;
+
+  // Always show the obstacle status, even when the robot is stopped.
+  // Automatic turning is still allowed only while moving forward.
+  if (!obstacleDetected) {
+    if (!obstacleCorrection) {
+      setObstacleIndicators(false);
+    }
+    return;
+  }
+
+  Serial.print("OBSTACLE: A=");
+  if (distanceA < 0) {
+    Serial.print("NO ECHO");
+  } else {
+    Serial.print(distanceA, 1);
+    Serial.print(" cm");
+  }
+
+  Serial.print(", B=");
+  if (distanceB < 0) {
+    Serial.print("NO ECHO");
+  } else {
+    Serial.print(distanceB, 1);
+    Serial.print(" cm");
+  }
+  Serial.println();
+
+  // Obstacle is below 20 cm: NeoPixel RED + external LEDs.
+  setObstacleIndicators(true);
+
   if (recording || currentState != 'F') {
     return;
   }
@@ -225,23 +262,6 @@ void handleObstacle() {
     return;
   }
 
-  float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
-  delay(50);
-  float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
-
-  if (distanceA >= OBSTACLE_DISTANCE_CM &&
-      distanceB >= OBSTACLE_DISTANCE_CM) {
-    setObstacleIndicators(false);
-    return;
-  }
-
-  Serial.print("OBSTACLE: A=");
-  Serial.print(distanceA);
-  Serial.print(" cm, B=");
-  Serial.print(distanceB);
-  Serial.println(" cm");
-
-  setObstacleIndicators(true);
   stopMotor();
 
   obstacleBlinkState = true;
@@ -249,9 +269,7 @@ void handleObstacle() {
   digitalWrite(OBSTACLE_LED_2, HIGH);
   lastObstacleBlink = millis();
 
-  if (distanceA < OBSTACLE_DISTANCE_CM &&
-      distanceB < OBSTACLE_DISTANCE_CM) {
-
+  if (obstacleA && obstacleB) {
     float difference = distanceA > distanceB
                         ? distanceA - distanceB
                         : distanceB - distanceA;
@@ -266,7 +284,7 @@ void handleObstacle() {
     }
   }
 
-  if (distanceA < distanceB) {
+  if (obstacleA && (!obstacleB || distanceA < distanceB)) {
     obstacleTurnDirection = 'L';
   } else {
     obstacleTurnDirection = 'R';
@@ -278,7 +296,6 @@ void handleObstacle() {
   obstacleCorrection = true;
   obstacleTurnStart = millis();
 }
-
 void readHeadingCorrection() {
   while (NanoSerial.available()) {
     char c = NanoSerial.read();
