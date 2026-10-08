@@ -64,6 +64,7 @@ uint8_t serialCommandIndex = 0;
 char bluetoothCommandBuffer[24];
 uint8_t bluetoothCommandIndex = 0;
 unsigned long lastBluetoothByteTime = 0;
+unsigned long lastSerialByteTime = 0;
 
 void setColor(uint8_t r, uint8_t g, uint8_t b) {
   solidColor = strip.Color(r, g, b);
@@ -234,9 +235,31 @@ void readTextCommand(Stream &stream, char *buffer, uint8_t &index) {
       continue;
     }
 
-    if (index < 23) {
-      buffer[index++] = c;
+    if (index == 0 && isNavigationCommand(c)) {
+      buffer[index++] = toupper(c);
+      lastSerialByteTime = millis();
+      continue;
     }
+
+    if (index == 1 && isNavigationCommand(buffer[0]) && toupper(c) == buffer[0]) {
+      processCommandText(buffer);
+      index = 0;
+      buffer[index++] = toupper(c);
+      lastSerialByteTime = millis();
+      continue;
+    }
+
+    if (index < 23) {
+      buffer[index++] = toupper(c);
+    }
+
+    lastSerialByteTime = millis();
+  }
+
+  if (index > 0 && millis() - lastSerialByteTime >= 100) {
+    buffer[index] = '\0';
+    processCommandText(buffer);
+    index = 0;
   }
 }
 
@@ -258,7 +281,6 @@ void readBluetoothTerminal() {
         processCommandText(bluetoothCommandBuffer);
         bluetoothCommandIndex = 0;
       }
-      lastBluetoothByteTime = millis();
       continue;
     }
 
@@ -267,13 +289,23 @@ void readBluetoothTerminal() {
     }
 
     if (bluetoothCommandIndex == 0 && isNavigationCommand(c)) {
-      handleCommand(c);
+      bluetoothCommandBuffer[bluetoothCommandIndex++] = toupper(c);
+      lastBluetoothByteTime = millis();
+      continue;
+    }
+
+    if (bluetoothCommandIndex == 1 &&
+        isNavigationCommand(bluetoothCommandBuffer[0]) &&
+        toupper(c) == bluetoothCommandBuffer[0]) {
+      processCommandText(bluetoothCommandBuffer);
+      bluetoothCommandIndex = 0;
+      bluetoothCommandBuffer[bluetoothCommandIndex++] = toupper(c);
       lastBluetoothByteTime = millis();
       continue;
     }
 
     if (bluetoothCommandIndex < 23) {
-      bluetoothCommandBuffer[bluetoothCommandIndex++] = c;
+      bluetoothCommandBuffer[bluetoothCommandIndex++] = toupper(c);
     }
 
     lastBluetoothByteTime = millis();
