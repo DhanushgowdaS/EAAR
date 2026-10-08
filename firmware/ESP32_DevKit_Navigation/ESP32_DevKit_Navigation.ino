@@ -60,6 +60,7 @@ char obstacleTurnDirection = 'N';
 unsigned long obstacleTurnStart = 0;
 unsigned long lastObstacleBlink = 0;
 bool obstacleBlinkState = false;
+bool obstacleDetectedState = false;
 unsigned long lastUltrasonicPrint = 0;
 
 bool isNavigationCommand(char command) {
@@ -193,9 +194,10 @@ void setObstacleIndicators(bool active) {
 }
 
 void updateObstacleBlink() {
-  if (!obstacleCorrection) {
+  if (!obstacleDetectedState) {
     digitalWrite(OBSTACLE_LED_1, LOW);
     digitalWrite(OBSTACLE_LED_2, LOW);
+    obstacleBlinkState = false;
     return;
   }
 
@@ -207,7 +209,6 @@ void updateObstacleBlink() {
     digitalWrite(OBSTACLE_LED_2, obstacleBlinkState ? HIGH : LOW);
   }
 }
-
 void handleObstacle() {
   updateObstacleBlink();
 
@@ -218,6 +219,7 @@ void handleObstacle() {
   bool obstacleA = distanceA >= 0 && distanceA < OBSTACLE_DISTANCE_CM;
   bool obstacleB = distanceB >= 0 && distanceB < OBSTACLE_DISTANCE_CM;
   bool obstacleDetected = obstacleA || obstacleB;
+  obstacleDetectedState = obstacleDetected;
 
   // Always show the obstacle status, even when the robot is stopped.
   // Automatic turning is still allowed only while moving forward.
@@ -247,6 +249,7 @@ void handleObstacle() {
 
   // Obstacle is below 20 cm: NeoPixel RED + external LEDs.
   setObstacleIndicators(true);
+  updateObstacleBlink();
 
   if (recording || currentState != 'F') {
     return;
