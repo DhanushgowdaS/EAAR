@@ -74,6 +74,7 @@ bool lastUpTrig = LOW;
 bool lastDownTrig = LOW;
 bool lastNavCheckpointTrig = LOW;
 bool navigationCycle = false;
+char triggerStatus = '-';
 
 unsigned long stateStart = 0;
 unsigned long lastDhtRead = 0;
@@ -288,9 +289,19 @@ void updateLCD() {
   snprintf(
     line4,
     sizeof(line4),
-    "State: %-12s",
+    "State:%-12s",
     stateText[state]
   );
+
+  // Show checkpoint trigger status in the remaining LCD space.
+  // R = trigger received, T = ready trigger transmitted.
+  line4[13] = ' ';
+  line4[14] = 'T';
+  line4[15] = 'R';
+  line4[16] = 'I';
+  line4[17] = 'G';
+  line4[18] = ':';
+  line4[19] = triggerStatus;
 
   lcd.setCursor(0, 0);
   lcd.print(line1);
@@ -393,6 +404,7 @@ void loop() {
   bleDownFlag = false;
 
   if (navCheckpointEdge) {
+    triggerStatus = 'R';
     Serial.println("NAV CHECKPOINT TRIGGER RECEIVED on GPIO7");
 
     if (state != STATE_UP) {
@@ -475,6 +487,7 @@ void loop() {
     state = STATE_UP;
 
     if (navigationCycle) {
+      triggerStatus = 'T';
       digitalWrite(NAV_READY_TRIG, HIGH);
       delay(100);
       digitalWrite(NAV_READY_TRIG, LOW);
