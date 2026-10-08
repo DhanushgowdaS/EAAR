@@ -193,9 +193,29 @@ void processCommandText(char *command) {
     return;
   }
 
-  processLightingCommand(command);
+  if (strcmp(command, "RED") == 0 ||
+      strcmp(command, "GREEN") == 0 ||
+      strcmp(command, "BLUE") == 0 ||
+      strcmp(command, "YELLOW") == 0 ||
+      strcmp(command, "CYAN") == 0 ||
+      strcmp(command, "MAGENTA") == 0 ||
+      strcmp(command, "WHITE") == 0 ||
+      strcmp(command, "ORANGE") == 0 ||
+      strcmp(command, "PURPLE") == 0 ||
+      strcmp(command, "PINK") == 0 ||
+      strcmp(command, "WARM") == 0 ||
+      strcmp(command, "MAROON") == 0 ||
+      strcmp(command, "PEACOCK") == 0 ||
+      strcmp(command, "OFF") == 0 ||
+      strcmp(command, "SNAKE") == 0 ||
+      strcmp(command, "FADE") == 0 ||
+      strcmp(command, "FADING") == 0 ||
+      strcmp(command, "DJ") == 0) {
+    processLightingCommand(command);
+    return;
+  }
 
-  if (strlen(command) == 1) {
+  if (strlen(command) == 1 && isNavigationCommand(command[0])) {
     handleCommand(command[0]);
   }
 }
@@ -257,7 +277,7 @@ void readBluetoothTerminal() {
   }
 
   if (bluetoothCommandIndex > 0 &&
-      millis() - lastBluetoothByteTime >= 50) {
+      millis() - lastBluetoothByteTime >= 500) {
     bluetoothCommandBuffer[bluetoothCommandIndex] = '\0';
     processCommandText(bluetoothCommandBuffer);
     bluetoothCommandIndex = 0;
