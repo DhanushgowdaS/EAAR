@@ -22,6 +22,17 @@
 #define LED_COUNT 8
 #define LED_BRIGHTNESS 255
 
+#define ULTRASONIC_A_TRIG 18
+#define ULTRASONIC_A_ECHO 5
+#define ULTRASONIC_B_TRIG 12
+#define ULTRASONIC_B_ECHO 14
+#define OBSTACLE_LED_1 13
+#define OBSTACLE_LED_2 15
+
+#define OBSTACLE_DISTANCE_CM 20
+#define SIMILAR_DISTANCE_CM 5
+#define OBSTACLE_TURN_TIME_MS 200
+
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
 Preferences prefs;
@@ -43,6 +54,10 @@ unsigned long stateStartTime = 0;
 bool recording = false;
 bool automaticMode = false;
 
+bool obstacleCorrection = false;
+char obstacleTurnDirection = 'N';
+unsigned long obstacleTurnStart = 0;
+
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
          command == 'L' || command == 'R' ||
@@ -63,6 +78,18 @@ void setup() {
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
+
+  pinMode(ULTRASONIC_A_TRIG, OUTPUT);
+  pinMode(ULTRASONIC_A_ECHO, INPUT);
+  pinMode(ULTRASONIC_B_TRIG, OUTPUT);
+  pinMode(ULTRASONIC_B_ECHO, INPUT);
+  pinMode(OBSTACLE_LED_1, OUTPUT);
+  pinMode(OBSTACLE_LED_2, OUTPUT);
+
+  digitalWrite(ULTRASONIC_A_TRIG, LOW);
+  digitalWrite(ULTRASONIC_B_TRIG, LOW);
+  digitalWrite(OBSTACLE_LED_1, LOW);
+  digitalWrite(OBSTACLE_LED_2, LOW);
 
   stopMotor();
 
@@ -95,6 +122,7 @@ void setup() {
 void loop() {
   readHeadingCorrection();
   readBluetooth();
+  handleObstacle();
   applyDrive();
 }
 
@@ -113,7 +141,8 @@ void readBluetooth() {
   while (HC05Serial.available()) {
     char command = HC05Serial.read();
 
-    if (command == '\r' || command == '\n' || command == ' ') {
+    if (command == '' || command == '
+' || command == ' ') {
       continue;
     }
 
@@ -211,7 +240,108 @@ void handleCommand(char command) {
   }
 }
 
+float readDistanceCM(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  unsigned long duration = pulseIn(echoPin, HIGH, 25000);
+  if (duration == 0) {
+    return 400.0;
+  }
+
+  return duration * 0.0343 / 2.0;
+}
+
+void setObstacleLeds(bool active) {
+  if (active) {
+    strip.fill(strip.Color(255, 0, 0));
+    digitalWrite(OBSTACLE_LED_1, HIGH);
+    digitalWrite(OBSTACLE_LED_2, HIGH);
+  } else {
+    strip.fill(strip.Color(0, 255, 255));
+    digitalWrite(OBSTACLE_LED_1, LOW);
+    digitalWrite(OBSTACLE_LED_2, LOW);
+  }
+
+  strip.show();
+}
+
+void handleObstacle() {
+  if (recording || currentState == 'S' ||
+      (currentState != 'F' && currentState != 'B')) {
+    return;
+  }
+
+  float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
+  float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
+
+  bool obstacleA = distanceA < OBSTACLE_DISTANCE_CM;
+  bool obstacleB = distanceB < OBSTACLE_DISTANCE_CM;
+
+  if (!obstacleA && !obstacleB) {
+    if (obstacleCorrection) {
+      obstacleCorrection = false;
+      obstacleTurnDirection = 'N';
+      stopMotor();
+    }
+    setObstacleLeds(false);
+    return;
+  }
+
+  setObstacleLeds(true);
+
+  if (obstacleCorrection) {
+    if (millis() - obstacleTurnStart < OBSTACLE_TURN_TIME_MS) {
+      return;
+    }
+
+    obstacleCorrection = false;
+    obstacleTurnDirection = 'N';
+    stopMotor();
+    return;
+  }
+
+  stopMotor();
+
+  if (obstacleA && obstacleB) {
+    float difference = distanceA > distanceB
+                         ? distanceA - distanceB
+                         : distanceB - distanceA;
+
+    if (difference <= SIMILAR_DISTANCE_CM) {
+      currentState = 'S';
+      automaticMode = false;
+      return;
+    }
+
+    if (distanceA < distanceB) {
+      obstacleTurnDirection = 'L';
+    } else {
+      obstacleTurnDirection = 'R';
+    }
+  } else if (obstacleA) {
+    obstacleTurnDirection = 'L';
+  } else {
+    obstacleTurnDirection = 'R';
+  }
+
+  obstacleCorrection = true;
+  obstacleTurnStart = millis();
+}
+
 void applyDrive() {
+  if (obstacleCorrection) {
+    if (obstacleTurnDirection == 'L') {
+      left();
+    } else if (obstacleTurnDirection == 'R') {
+      right();
+    }
+    return;
+  }
+
   if (currentState != 'F' &&
       currentState != 'B' &&
       currentState != 'L' &&
@@ -402,6 +532,7 @@ void startAutomatic() {
     while (automaticMode && millis() - startTime < duration) {
       readHeadingCorrection();
       readBluetooth();
+      handleObstacle();
       applyDrive();
       delay(5);
     }
@@ -474,6 +605,9 @@ void right() {
 }
 
 void stopMotor() {
+  obstacleCorrection = false;
+  obstacleTurnDirection = 'N';
+
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW);
