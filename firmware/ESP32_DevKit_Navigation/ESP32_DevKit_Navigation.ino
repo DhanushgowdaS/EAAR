@@ -73,7 +73,7 @@ bool isNavigationCommand(char command) {
 void setup() {
   Serial.begin(115200);
 
-  NanoSerial.begin(9600, SERIAL_8N1, 27, 14);
+  NanoSerial.begin(9600, SERIAL_8N1, 27, 19);
   HC05Serial.begin(9600, SERIAL_8N1, 16, 17);
 
   pinMode(ENA, OUTPUT);
@@ -120,7 +120,7 @@ void setup() {
   Serial.println("A = Automatic");
   Serial.println("D = Delete Route");
   Serial.println("HC-05: RX16/TX17 @ 9600");
-  Serial.println("Nano:  RX27/TX14 @ 9600");
+  Serial.println("Nano:  RX27/TX19 @ 9600");
   Serial.println("Ultrasonic A: TRIG18 ECHO5");
   Serial.println("Ultrasonic B: TRIG12 ECHO14");
   Serial.println("================================");
