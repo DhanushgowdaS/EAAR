@@ -61,7 +61,6 @@ unsigned long obstacleTurnStart = 0;
 unsigned long lastObstacleBlink = 0;
 bool obstacleBlinkState = false;
 bool obstacleDetectedState = false;
-unsigned long lastUltrasonicRead = 0;
 float ultrasonicDistanceA = -1.0;
 float ultrasonicDistanceB = -1.0;
 
@@ -139,15 +138,11 @@ void loop() {
 }
 
 void updateUltrasonicReadings() {
-  if (millis() - lastUltrasonicRead < 50) {
-    return;
-  }
-
-  lastUltrasonicRead = millis();
-
-  // Read both sensors at the same fixed 50 ms update rate.
+  // Read both sensors continuously with a fixed 50 ms interval.
   ultrasonicDistanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
   ultrasonicDistanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
+
+  delay(50);
 }
 
 void printUltrasonicDistances() {
