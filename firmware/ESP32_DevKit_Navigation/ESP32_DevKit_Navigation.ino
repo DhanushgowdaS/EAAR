@@ -167,7 +167,7 @@ void processLightingCommand(const char *command) {
   } else if (strcmp(command, "WARM") == 0) {
     setColor(255, 100, 20);
   } else if (strcmp(command, "MAROON") == 0) {
-    setColor(80, 0, 20);
+    setColor(0, 255, 255);
   } else if (strcmp(command, "PEACOCK") == 0) {
     setColor(0, 180, 180);
   } else if (strcmp(command, "OFF") == 0) {
@@ -269,6 +269,12 @@ void readBluetoothTerminal() {
       continue;
     }
 
+    if (bluetoothCommandIndex == 0 && isNavigationCommand(c)) {
+      bluetoothCommandBuffer[bluetoothCommandIndex++] = c;
+      lastBluetoothByteTime = millis();
+      continue;
+    }
+
     if (bluetoothCommandIndex < 23) {
       bluetoothCommandBuffer[bluetoothCommandIndex++] = c;
     }
@@ -277,7 +283,7 @@ void readBluetoothTerminal() {
   }
 
   if (bluetoothCommandIndex > 0 &&
-      millis() - lastBluetoothByteTime >= 500) {
+      millis() - lastBluetoothByteTime >= 100) {
     bluetoothCommandBuffer[bluetoothCommandIndex] = '\0';
     processCommandText(bluetoothCommandBuffer);
     bluetoothCommandIndex = 0;
