@@ -685,10 +685,8 @@ void runForwardWithCheckpoints(unsigned long totalMoveTime) {
     digitalWrite(S3_CHECKPOINT_TRIGGER, LOW);
     Serial.println("S3 TRIGGER: GPIO14 LOW (100 ms pulse SENT)");
 
-    // Keep the DevKit LED on briefly so the trigger can be seen physically.
-    delay(900);
-    digitalWrite(CHECKPOINT_DEBUG_LED, LOW);
-    Serial.println("CHECKPOINT DEBUG LED: OFF");
+    // Keep the DevKit LED ON while waiting for the ESP32-S3 READY signal.
+    // This gives a direct physical indication that the trigger was sent.
 
     // Wait indefinitely for the ESP32-S3 READY signal.
     // This wait time is outside the stored movement duration.
@@ -708,7 +706,9 @@ void runForwardWithCheckpoints(unsigned long totalMoveTime) {
       return;
     }
 
+    digitalWrite(CHECKPOINT_DEBUG_LED, LOW);
     Serial.println("ESP32-S3 READY RECEIVED. CONTINUING ROUTE");
+    Serial.println("CHECKPOINT DEBUG LED: OFF");
 
     // Continue counting from the previous movement time.
     nextCheckpoint += (unsigned long)CHECKPOINT_MOVE_SECONDS * 1000UL;
