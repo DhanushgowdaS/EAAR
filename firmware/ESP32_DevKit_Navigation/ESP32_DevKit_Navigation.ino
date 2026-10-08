@@ -26,12 +26,14 @@
 #define ULTRASONIC_A_ECHO 5
 #define ULTRASONIC_B_TRIG 12
 #define ULTRASONIC_B_ECHO 14
+
 #define OBSTACLE_LED_1 13
 #define OBSTACLE_LED_2 15
 
-#define OBSTACLE_DISTANCE_CM 20
-#define SIMILAR_DISTANCE_CM 5
-#define OBSTACLE_TURN_TIME_MS 200
+#define OBSTACLE_DISTANCE_CM 20.0
+#define SIMILAR_DISTANCE_CM 5.0
+#define OBSTACLE_TURN_TIME_MS 180
+#define ULTRASONIC_TIMEOUT_US 25000
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -53,7 +55,6 @@ unsigned long stateStartTime = 0;
 
 bool recording = false;
 bool automaticMode = false;
-
 bool obstacleCorrection = false;
 char obstacleTurnDirection = 'N';
 unsigned long obstacleTurnStart = 0;
@@ -79,6 +80,8 @@ void setup() {
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
 
+  stopMotor();
+
   pinMode(ULTRASONIC_A_TRIG, OUTPUT);
   pinMode(ULTRASONIC_A_ECHO, INPUT);
   pinMode(ULTRASONIC_B_TRIG, OUTPUT);
@@ -90,8 +93,6 @@ void setup() {
   digitalWrite(ULTRASONIC_B_TRIG, LOW);
   digitalWrite(OBSTACLE_LED_1, LOW);
   digitalWrite(OBSTACLE_LED_2, LOW);
-
-  stopMotor();
 
   strip.begin();
   strip.setBrightness(LED_BRIGHTNESS);
@@ -124,6 +125,81 @@ void loop() {
   readBluetooth();
   handleObstacle();
   applyDrive();
+}
+
+
+float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  unsigned long duration = pulseIn(echoPin, HIGH, ULTRASONIC_TIMEOUT_US);
+
+  if (duration == 0) {
+    return 400.0;
+  }
+
+  return duration * 0.0343 / 2.0;
+}
+
+void setObstacleIndicators(bool active) {
+  if (active) {
+    strip.fill(strip.Color(255, 0, 0));
+    digitalWrite(OBSTACLE_LED_1, HIGH);
+    digitalWrite(OBSTACLE_LED_2, HIGH);
+  } else {
+    strip.fill(strip.Color(0, 255, 255));
+    digitalWrite(OBSTACLE_LED_1, LOW);
+    digitalWrite(OBSTACLE_LED_2, LOW);
+  }
+
+  strip.show();
+}
+
+void handleObstacle() {
+  if (recording || currentState != 'F') {
+    return;
+  }
+
+  if (obstacleCorrection) {
+    if (millis() - obstacleTurnStart >= OBSTACLE_TURN_TIME_MS) {
+      obstacleCorrection = false;
+      obstacleTurnDirection = 'N';
+      stopMotor();
+    }
+    return;
+  }
+
+  float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
+  float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
+
+  if (distanceA >= OBSTACLE_DISTANCE_CM &&
+      distanceB >= OBSTACLE_DISTANCE_CM) {
+    setObstacleIndicators(false);
+    return;
+  }
+
+  setObstacleIndicators(true);
+  stopMotor();
+
+  if (distanceA < OBSTACLE_DISTANCE_CM &&
+      distanceB < OBSTACLE_DISTANCE_CM &&
+      fabs(distanceA - distanceB) <= SIMILAR_DISTANCE_CM) {
+    currentState = 'S';
+    automaticMode = false;
+    return;
+  }
+
+  if (distanceA < distanceB) {
+    obstacleTurnDirection = 'L';
+  } else {
+    obstacleTurnDirection = 'R';
+  }
+
+  obstacleCorrection = true;
+  obstacleTurnStart = millis();
 }
 
 void readHeadingCorrection() {
@@ -239,92 +315,6 @@ void handleCommand(char command) {
   if (command == 'D') {
     deleteFlash();
   }
-}
-
-float readDistanceCM(int trigPin, int echoPin) {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-
-  unsigned long duration = pulseIn(echoPin, HIGH, 25000);
-
-  if (duration == 0) {
-    return 400.0;
-  }
-
-  return duration * 0.0343 / 2.0;
-}
-
-void setObstacleLeds(bool active) {
-  if (active) {
-    strip.fill(strip.Color(255, 0, 0));
-    digitalWrite(OBSTACLE_LED_1, HIGH);
-    digitalWrite(OBSTACLE_LED_2, HIGH);
-  } else {
-    strip.fill(strip.Color(0, 255, 255));
-    digitalWrite(OBSTACLE_LED_1, LOW);
-    digitalWrite(OBSTACLE_LED_2, LOW);
-  }
-
-  strip.show();
-}
-
-void handleObstacle() {
-  if (recording ||
-      (currentState != 'F' && currentState != 'B')) {
-    return;
-  }
-
-  if (obstacleCorrection) {
-    if (millis() - obstacleTurnStart >= OBSTACLE_TURN_TIME_MS) {
-      obstacleCorrection = false;
-      obstacleTurnDirection = 'N';
-      stopMotor();
-    }
-
-    return;
-  }
-
-  float distanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
-  float distanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
-
-  bool obstacleA = distanceA < OBSTACLE_DISTANCE_CM;
-  bool obstacleB = distanceB < OBSTACLE_DISTANCE_CM;
-
-  if (!obstacleA && !obstacleB) {
-    setObstacleLeds(false);
-    return;
-  }
-
-  setObstacleLeds(true);
-  stopMotor();
-
-  if (obstacleA && obstacleB) {
-    float difference = fabs(distanceA - distanceB);
-
-    if (difference <= SIMILAR_DISTANCE_CM) {
-      currentState = 'S';
-      automaticMode = false;
-      obstacleCorrection = false;
-      obstacleTurnDirection = 'N';
-      return;
-    }
-
-    if (distanceA < distanceB) {
-      obstacleTurnDirection = 'L';
-    } else {
-      obstacleTurnDirection = 'R';
-    }
-  } else if (obstacleA) {
-    obstacleTurnDirection = 'L';
-  } else {
-    obstacleTurnDirection = 'R';
-  }
-
-  obstacleCorrection = true;
-  obstacleTurnStart = millis();
 }
 
 void applyDrive() {
