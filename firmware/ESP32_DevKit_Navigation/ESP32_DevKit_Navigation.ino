@@ -22,11 +22,13 @@
 #define LED_COUNT 8
 #define LED_BRIGHTNESS 255
 
+// Ultrasonic sensors
 #define ULTRASONIC_A_TRIG 18
 #define ULTRASONIC_A_ECHO 5
 #define ULTRASONIC_B_TRIG 12
 #define ULTRASONIC_B_ECHO 34
 
+// Obstacle LEDs
 #define OBSTACLE_LED_1 13
 #define OBSTACLE_LED_2 15
 
@@ -53,9 +55,6 @@ unsigned long stateStartTime = 0;
 
 bool recording = false;
 bool automaticMode = false;
-unsigned long lastObstacleBlink = 0;
-bool obstacleBlinkState = false;
-bool obstacleDetectedState = false;
 float ultrasonicDistanceA = -1.0;
 float ultrasonicDistanceB = -1.0;
 
@@ -120,6 +119,7 @@ void setup() {
   Serial.println("Nano:  RX27/TX19 @ 9600");
   Serial.println("Ultrasonic A: TRIG18 ECHO5");
   Serial.println("Ultrasonic B: TRIG12 ECHO34");
+  Serial.println("Obstacle LEDs: GPIO13 GPIO15");
   Serial.println("================================");
 }
 
@@ -127,39 +127,12 @@ void loop() {
   readHeadingCorrection();
   readBluetooth();
   updateUltrasonicReadings();
-  printUltrasonicDistances();
-  handleObstacle();
   applyDrive();
 }
 
 void updateUltrasonicReadings() {
-  // Read both sensors continuously with a fixed 50 ms interval.
   ultrasonicDistanceA = readDistanceCM(ULTRASONIC_A_TRIG, ULTRASONIC_A_ECHO);
   ultrasonicDistanceB = readDistanceCM(ULTRASONIC_B_TRIG, ULTRASONIC_B_ECHO);
-
-  delay(50);
-}
-
-void printUltrasonicDistances() {
-  Serial.print("ULTRASONIC A = ");
-
-  if (ultrasonicDistanceA < 0) {
-    Serial.print("NO ECHO");
-  } else {
-    Serial.print(ultrasonicDistanceA, 1);
-    Serial.print(" cm");
-  }
-
-  Serial.print(" | B = ");
-
-  if (ultrasonicDistanceB < 0) {
-    Serial.print("NO ECHO");
-  } else {
-    Serial.print(ultrasonicDistanceB, 1);
-    Serial.print(" cm");
-  }
-
-  Serial.println();
 }
 
 float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
@@ -179,50 +152,14 @@ float readDistanceCM(uint8_t trigPin, uint8_t echoPin) {
   return duration * 0.0343 / 2.0;
 }
 
-void setObstacleIndicators(bool active) {
-  if (active) {
-    strip.fill(strip.Color(255, 0, 0));
-    strip.show();
-  } else {
-    strip.fill(strip.Color(0, 255, 255));
-    strip.show();
-  }
-}
-
-void updateObstacleBlink() {
-  if (!obstacleDetectedState) {
-    digitalWrite(OBSTACLE_LED_1, LOW);
-    digitalWrite(OBSTACLE_LED_2, LOW);
-    obstacleBlinkState = false;
-    return;
-  }
-
-  if (millis() - lastObstacleBlink >= 250) {
-    lastObstacleBlink = millis();
-    obstacleBlinkState = !obstacleBlinkState;
-
-    digitalWrite(OBSTACLE_LED_1, obstacleBlinkState ? HIGH : LOW);
-    digitalWrite(OBSTACLE_LED_2, obstacleBlinkState ? HIGH : LOW);
-  }
-}
-void handleObstacle() {
+bool frontObstacleDetected() {
   bool obstacleA = ultrasonicDistanceA >= 0 &&
                    ultrasonicDistanceA < OBSTACLE_DISTANCE_CM;
+
   bool obstacleB = ultrasonicDistanceB >= 0 &&
                    ultrasonicDistanceB < OBSTACLE_DISTANCE_CM;
 
-  obstacleDetectedState = obstacleA || obstacleB;
-
-  if (obstacleDetectedState) {
-    // Any object below 20 cm: stop the car, blink external LEDs,
-    // and turn the NeoPixel beacon RED. No left/right turning.
-    stopMotor();
-    setObstacleIndicators(true);
-    updateObstacleBlink();
-  } else {
-    setObstacleIndicators(false);
-    updateObstacleBlink();
-  }
+  return obstacleA || obstacleB;
 }
 
 void readHeadingCorrection() {
@@ -271,8 +208,13 @@ void handleCommand(char command) {
     if (recording) {
       changeState('F');
     } else if (!automaticMode) {
-      currentState = 'F';
-      forward();
+      if (frontObstacleDetected()) {
+        stopMotor();
+        currentState = 'S';
+      } else {
+        currentState = 'F';
+        forward();
+      }
     }
     return;
   }
@@ -313,8 +255,6 @@ void handleCommand(char command) {
     } else {
       automaticMode = false;
       currentState = 'S';
-      obstacleDetectedState = false;
-      setObstacleIndicators(false);
       stopMotor();
     }
     return;
@@ -341,6 +281,13 @@ void handleCommand(char command) {
 }
 
 void applyDrive() {
+  // If either ultrasonic sensor is below 20 cm, block FORWARD only.
+  // Left, right, and backward movement remain available.
+  if (currentState == 'F' && frontObstacleDetected()) {
+    stopMotor();
+    return;
+  }
+
   if (currentState != 'F' &&
       currentState != 'B' &&
       currentState != 'L' &&
@@ -532,7 +479,6 @@ void startAutomatic() {
       readHeadingCorrection();
       readBluetooth();
       updateUltrasonicReadings();
-      handleObstacle();
       applyDrive();
       delay(5);
     }
@@ -542,9 +488,6 @@ void startAutomatic() {
 
   automaticMode = false;
   currentState = 'S';
-  setObstacleIndicators(false);
-  digitalWrite(OBSTACLE_LED_1, LOW);
-  digitalWrite(OBSTACLE_LED_2, LOW);
   stopMotor();
 
   Serial.println("AUTOMATIC COMPLETED");
@@ -557,9 +500,6 @@ void deleteFlash() {
   automaticMode = false;
   routeCount = 0;
   currentState = 'S';
-  obstacleDetectedState = false;
-  setObstacleIndicators(false);
-
   prefs.remove("count");
   prefs.remove("route");
 
