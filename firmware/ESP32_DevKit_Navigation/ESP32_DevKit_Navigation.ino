@@ -1,4 +1,5 @@
 #include <Preferences.h>
+#include <Adafruit_NeoPixel.h>
 
 #define ENA 25
 #define ENB 26
@@ -16,6 +17,12 @@
 #define CORR_AMOUNT 40
 #define CORR_TIMEOUT_MS 200
 #define MAX_RECORDS 100
+
+#define LED_PIN 4
+#define LED_COUNT 8
+#define LED_BRIGHTNESS 255
+
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -36,6 +43,184 @@ unsigned long stateStartTime = 0;
 
 bool recording = false;
 bool automaticMode = false;
+
+enum LightingMode {
+  LIGHT_SOLID,
+  LIGHT_SNAKE,
+  LIGHT_FADE,
+  LIGHT_DJ
+};
+
+LightingMode lightingMode = LIGHT_SOLID;
+uint32_t solidColor = 0;
+uint32_t effectColor = 0;
+uint8_t fadeStep = 0;
+uint8_t snakePosition = 0;
+unsigned long lastLightingUpdate = 0;
+bool djState = false;
+
+char serialCommandBuffer[24];
+uint8_t serialCommandIndex = 0;
+char bluetoothCommandBuffer[24];
+uint8_t bluetoothCommandIndex = 0;
+
+void setColor(uint8_t r, uint8_t g, uint8_t b) {
+  solidColor = strip.Color(r, g, b);
+  lightingMode = LIGHT_SOLID;
+  strip.fill(solidColor);
+  strip.show();
+}
+
+void setLightingMode(LightingMode mode) {
+  lightingMode = mode;
+  lastLightingUpdate = 0;
+}
+
+void updateLighting() {
+  unsigned long now = millis();
+
+  if (lightingMode == LIGHT_SOLID) {
+    return;
+  }
+
+  if (lightingMode == LIGHT_SNAKE) {
+    if (now - lastLightingUpdate < 100) {
+      return;
+    }
+
+    lastLightingUpdate = now;
+    strip.clear();
+    strip.setPixelColor(snakePosition, effectColor);
+    strip.setPixelColor((snakePosition + LED_COUNT - 1) % LED_COUNT, effectColor);
+    strip.show();
+    snakePosition = (snakePosition + 1) % LED_COUNT;
+    return;
+  }
+
+  if (lightingMode == LIGHT_FADE) {
+    if (now - lastLightingUpdate < 25) {
+      return;
+    }
+
+    lastLightingUpdate = now;
+    uint8_t r = 127 + (127 * sin(fadeStep * 0.02454369));
+    uint8_t g = 127 + (127 * sin((fadeStep + 85) * 0.02454369));
+    uint8_t b = 127 + (127 * sin((fadeStep + 170) * 0.02454369));
+
+    strip.fill(strip.Color(r, g, b));
+    strip.show();
+    fadeStep++;
+    return;
+  }
+
+  if (lightingMode == LIGHT_DJ) {
+    if (now - lastLightingUpdate < 120) {
+      return;
+    }
+
+    lastLightingUpdate = now;
+    djState = !djState;
+
+    if (djState) {
+      uint8_t colorIndex = random(0, 7);
+      uint32_t colors[] = {
+        strip.Color(255, 0, 0),
+        strip.Color(0, 255, 0),
+        strip.Color(0, 0, 255),
+        strip.Color(255, 255, 0),
+        strip.Color(0, 255, 255),
+        strip.Color(255, 0, 255),
+        strip.Color(255, 255, 255)
+      };
+      effectColor = colors[colorIndex];
+      strip.fill(effectColor);
+    } else {
+      strip.clear();
+    }
+
+    strip.show();
+  }
+}
+
+void processLightingCommand(const char *command) {
+  if (strcmp(command, "RED") == 0) {
+    setColor(255, 0, 0);
+  } else if (strcmp(command, "GREEN") == 0) {
+    setColor(0, 255, 0);
+  } else if (strcmp(command, "BLUE") == 0) {
+    setColor(0, 0, 255);
+  } else if (strcmp(command, "YELLOW") == 0) {
+    setColor(255, 255, 0);
+  } else if (strcmp(command, "CYAN") == 0) {
+    setColor(0, 255, 255);
+  } else if (strcmp(command, "MAGENTA") == 0) {
+    setColor(255, 0, 255);
+  } else if (strcmp(command, "WHITE") == 0) {
+    setColor(255, 255, 255);
+  } else if (strcmp(command, "ORANGE") == 0) {
+    setColor(255, 80, 0);
+  } else if (strcmp(command, "PURPLE") == 0) {
+    setColor(128, 0, 255);
+  } else if (strcmp(command, "PINK") == 0) {
+    setColor(255, 20, 100);
+  } else if (strcmp(command, "WARM") == 0) {
+    setColor(255, 100, 20);
+  } else if (strcmp(command, "MAROON") == 0) {
+    setColor(80, 0, 20);
+  } else if (strcmp(command, "PEACOCK") == 0) {
+    setColor(0, 180, 180);
+  } else if (strcmp(command, "OFF") == 0) {
+    setColor(0, 0, 0);
+  } else if (strcmp(command, "SNAKE") == 0) {
+    effectColor = strip.Color(0, 0, 255);
+    snakePosition = 0;
+    setLightingMode(LIGHT_SNAKE);
+  } else if (strcmp(command, "FADE") == 0 || strcmp(command, "FADING") == 0) {
+    fadeStep = 0;
+    setLightingMode(LIGHT_FADE);
+  } else if (strcmp(command, "DJ") == 0) {
+    setLightingMode(LIGHT_DJ);
+  }
+}
+
+void processCommandText(char *command) {
+  for (char *p = command; *p; p++) {
+    *p = toupper(*p);
+  }
+
+  if (command[0] == '\0') {
+    return;
+  }
+
+  processLightingCommand(command);
+
+  if (strlen(command) == 1) {
+    handleCommand(command[0]);
+  }
+}
+
+void readTextCommand(Stream &stream, char *buffer, uint8_t &index) {
+  while (stream.available()) {
+    char c = stream.read();
+
+    if (c == '\r' || c == '\n') {
+      if (index > 0) {
+        buffer[index] = '\0';
+        processCommandText(buffer);
+        index = 0;
+      }
+      continue;
+    }
+
+    if (c == ' ') {
+      continue;
+    }
+
+    if (index < 23) {
+      buffer[index++] = c;
+    }
+  }
+}
 
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
@@ -60,6 +245,10 @@ void setup() {
 
   stopMotor();
 
+  strip.begin();
+  strip.setBrightness(LED_BRIGHTNESS);
+  setColor(80, 0, 20);
+
   prefs.begin("agribot", false);
 
   Serial.println();
@@ -76,6 +265,9 @@ void setup() {
   Serial.println("M = Store Route");
   Serial.println("A = Automatic");
   Serial.println("D = Delete Route");
+  Serial.println("LED: RED GREEN BLUE YELLOW CYAN MAGENTA WHITE");
+  Serial.println("LED: ORANGE PURPLE PINK WARM MAROON PEACOCK OFF");
+  Serial.println("EFFECTS: SNAKE FADE FADING DJ");
   Serial.println("HC-05: RX16/TX17 @ 9600");
   Serial.println("Nano:  RX27/TX14 @ 9600");
   Serial.println("================================");
@@ -84,7 +276,10 @@ void setup() {
 void loop() {
   readHeadingCorrection();
   readBluetooth();
+  readTextCommand(Serial, serialCommandBuffer, serialCommandIndex);
+  readTextCommand(HC05Serial, bluetoothCommandBuffer, bluetoothCommandIndex);
   applyDrive();
+  updateLighting();
 }
 
 void readHeadingCorrection() {
@@ -391,7 +586,10 @@ void startAutomatic() {
     while (automaticMode && millis() - startTime < duration) {
       readHeadingCorrection();
       readBluetooth();
+      readTextCommand(Serial, serialCommandBuffer, serialCommandIndex);
+      readTextCommand(HC05Serial, bluetoothCommandBuffer, bluetoothCommandIndex);
       applyDrive();
+      updateLighting();
       delay(5);
     }
 
