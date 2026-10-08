@@ -10,6 +10,7 @@
 #define DEFAULT_SPEED 225
 #define DEFAULT_TURN_SPEED 255
 #define CORR_AMOUNT 40
+#define CORR_TIMEOUT_MS 200
 #define MAX_RECORDS 100
 
 HardwareSerial NanoSerial(1);
@@ -26,6 +27,7 @@ int routeCount = 0;
 
 char currentState = 'S';
 char lastCorrection = 'N';
+unsigned long lastCorrectionTime = 0;
 unsigned long stateStartTime = 0;
 
 bool recording = false;
@@ -87,6 +89,7 @@ void readHeadingCorrection() {
 
     if (c == 'L' || c == 'R' || c == 'N') {
       lastCorrection = c;
+      lastCorrectionTime = millis();
     }
   }
 }
@@ -166,6 +169,7 @@ void handleCommand(char command) {
     if (recording) {
       changeState('S');
     } else {
+      automaticMode = false;
       currentState = 'S';
       stopMotor();
     }
@@ -210,14 +214,21 @@ void applyDrive() {
     rightSpeed = DEFAULT_TURN_SPEED;
   }
 
-  if (!automaticMode && !recording &&
+  if (!recording &&
       (currentState == 'F' || currentState == 'B')) {
 
-    char correction = lastCorrection;
+    char correction = 'N';
+
+    if (millis() - lastCorrectionTime <= CORR_TIMEOUT_MS) {
+      correction = lastCorrection;
+    }
 
     if (currentState == 'B') {
-      if (correction == 'L') correction = 'R';
-      else if (correction == 'R') correction = 'L';
+      if (correction == 'L') {
+        correction = 'R';
+      } else if (correction == 'R') {
+        correction = 'L';
+      }
     }
 
     if (correction == 'L') {
@@ -347,9 +358,10 @@ void startAutomatic() {
 
   Serial.println("AUTOMATIC STARTED");
 
-  for (int i = 0; i < routeCount; i++) {
+  for (int i = 0; i < routeCount && automaticMode; i++) {
     char command = route[i].command;
     unsigned long duration = route[i].duration;
+    unsigned long startTime = millis();
 
     currentState = command;
 
@@ -366,8 +378,13 @@ void startAutomatic() {
       stopMotor();
     }
 
-    applyDrive();
-    delay(duration);
+    while (automaticMode && millis() - startTime < duration) {
+      readHeadingCorrection();
+      readBluetooth();
+      applyDrive();
+      delay(5);
+    }
+
     stopMotor();
   }
 
