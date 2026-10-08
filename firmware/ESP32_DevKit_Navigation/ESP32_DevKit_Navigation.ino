@@ -65,6 +65,7 @@ char bluetoothCommandBuffer[24];
 uint8_t bluetoothCommandIndex = 0;
 unsigned long lastBluetoothByteTime = 0;
 unsigned long lastSerialByteTime = 0;
+const unsigned long COMMAND_TIMEOUT_MS = 500;
 
 void setColor(uint8_t r, uint8_t g, uint8_t b) {
   solidColor = strip.Color(r, g, b);
@@ -256,7 +257,7 @@ void readTextCommand(Stream &stream, char *buffer, uint8_t &index) {
     lastSerialByteTime = millis();
   }
 
-  if (index > 0 && millis() - lastSerialByteTime >= 100) {
+  if (index > 0 && millis() - lastSerialByteTime >= COMMAND_TIMEOUT_MS) {
     buffer[index] = '\0';
     processCommandText(buffer);
     index = 0;
@@ -312,7 +313,7 @@ void readBluetoothTerminal() {
   }
 
   if (bluetoothCommandIndex > 0 &&
-      millis() - lastBluetoothByteTime >= 100) {
+      millis() - lastBluetoothByteTime >= COMMAND_TIMEOUT_MS) {
     bluetoothCommandBuffer[bluetoothCommandIndex] = '\0';
     processCommandText(bluetoothCommandBuffer);
     bluetoothCommandIndex = 0;
