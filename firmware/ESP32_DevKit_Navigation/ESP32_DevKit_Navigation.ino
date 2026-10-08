@@ -9,7 +9,9 @@
 
 #define DEFAULT_SPEED 255
 #define FORWARD_LEFT_SPEED 255
-#define FORWARD_RIGHT_SPEED 255
+#define FORWARD_RIGHT_SPEED 254
+#define BACKWARD_LEFT_SPEED 255
+#define BACKWARD_RIGHT_SPEED 254
 #define DEFAULT_TURN_SPEED 225
 #define CORR_AMOUNT 40
 #define CORR_TIMEOUT_MS 200
@@ -214,6 +216,9 @@ void applyDrive() {
   if (currentState == 'F') {
     leftSpeed = FORWARD_LEFT_SPEED;
     rightSpeed = FORWARD_RIGHT_SPEED;
+  } else if (currentState == 'B') {
+    leftSpeed = BACKWARD_LEFT_SPEED;
+    rightSpeed = BACKWARD_RIGHT_SPEED;
   } else if (currentState == 'L' || currentState == 'R') {
     leftSpeed = DEFAULT_TURN_SPEED;
     rightSpeed = DEFAULT_TURN_SPEED;
