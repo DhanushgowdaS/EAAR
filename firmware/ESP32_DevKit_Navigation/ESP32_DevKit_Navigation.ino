@@ -667,6 +667,13 @@ void startAutomatic() {
         readHeadingCorrection();
         readBluetooth();
 
+        // Later route movements run continuously for their stored duration.
+        // Checkpoint logic is NOT used here.
+        if (command == 'F') {
+          currentState = 'F';
+          forward();
+        }
+
         updateUltrasonicReadings();
 
         bool obstacle = frontObstacleDetected();
@@ -691,7 +698,19 @@ void startAutomatic() {
         Serial.println(obstacle ? "YES" : "NO");
 
         updateObstacleIndicators(obstacle);
-        applyDrive();
+
+        if (command == 'F') {
+          // Keep the later forward segment running continuously.
+          // The normal global forward obstacle safeguard still applies.
+          if (obstacle) {
+            stopMotor();
+          } else {
+            applyDrive();
+          }
+        } else {
+          applyDrive();
+        }
+
         delay(5);
       }
 
