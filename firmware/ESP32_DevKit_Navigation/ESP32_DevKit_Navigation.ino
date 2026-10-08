@@ -38,7 +38,12 @@
 
 // Automatic forward checkpoint settings
 #define CHECKPOINT_MOVE_SECONDS 4
-#define CHECKPOINT_PAUSE_SECONDS 2
+
+// ESP32-S3 checkpoint handshake
+// DevKit GPIO14 -> S3 GPIO7  : checkpoint trigger
+// S3 GPIO10   -> DevKit GPIO21: arm ready / resume
+#define S3_CHECKPOINT_TRIGGER 14
+#define S3_READY_INPUT 21
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -118,6 +123,10 @@ void setup() {
   pinMode(OBSTACLE_LED_1, OUTPUT);
   pinMode(OBSTACLE_LED_2, OUTPUT);
 
+  pinMode(S3_CHECKPOINT_TRIGGER, OUTPUT);
+  pinMode(S3_READY_INPUT, INPUT_PULLDOWN);
+  digitalWrite(S3_CHECKPOINT_TRIGGER, LOW);
+
   digitalWrite(ULTRASONIC_A_TRIG, LOW);
   digitalWrite(ULTRASONIC_B_TRIG, LOW);
   digitalWrite(OBSTACLE_LED_1, LOW);
@@ -144,6 +153,8 @@ void setup() {
   Serial.println("M = Store Route");
   Serial.println("A = Automatic");
   Serial.println("D = Delete Route");
+  Serial.println("S3 Trigger: GPIO14 -> S3 GPIO7");
+  Serial.println("S3 Ready: S3 GPIO10 -> GPIO21");
   Serial.println("HC-05: RX16/TX17 @ 9600");
   Serial.println("Nano:  RX27/TX19 @ 9600");
   Serial.println("Ultrasonic A: TRIG18 ECHO5");
@@ -650,19 +661,23 @@ void runForwardWithCheckpoints(unsigned long totalMoveTime) {
       break;
     }
 
-    // Checkpoint reached: stop for 2 seconds.
+    // Checkpoint reached: stop and trigger the ESP32-S3.
+    // There is NO fixed 2-second delay now.
     Serial.print("CHECKPOINT REACHED AT ");
     Serial.print(movementElapsed / 1000UL);
-    Serial.println(" seconds. Waiting for 2 seconds");
+    Serial.println(" seconds. Triggering ESP32-S3 and waiting for READY");
 
     currentState = 'S';
     stopMotor();
 
-    unsigned long pauseStart = millis();
+    // Send a short checkpoint trigger pulse to the ESP32-S3.
+    digitalWrite(S3_CHECKPOINT_TRIGGER, HIGH);
+    delay(100);
+    digitalWrite(S3_CHECKPOINT_TRIGGER, LOW);
 
-    while (automaticMode &&
-           millis() - pauseStart <
-           (unsigned long)CHECKPOINT_PAUSE_SECONDS * 1000UL) {
+    // Wait indefinitely for the ESP32-S3 READY signal.
+    // This wait time is outside the stored movement duration.
+    while (automaticMode && digitalRead(S3_READY_INPUT) == LOW) {
       readHeadingCorrection();
       readBluetooth();
 
@@ -671,13 +686,14 @@ void runForwardWithCheckpoints(unsigned long totalMoveTime) {
       bool obstacle = frontObstacleDetected();
       updateObstacleIndicators(obstacle);
 
-      // Pause time is NOT counted in movementElapsed.
       delay(5);
     }
 
     if (!automaticMode) {
       return;
     }
+
+    Serial.println("ESP32-S3 READY RECEIVED. CONTINUING ROUTE");
 
     // Continue counting from the previous movement time.
     nextCheckpoint += (unsigned long)CHECKPOINT_MOVE_SECONDS * 1000UL;
