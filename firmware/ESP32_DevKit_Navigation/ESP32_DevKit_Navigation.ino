@@ -34,6 +34,8 @@
 #define SIMILAR_DISTANCE_CM 5.0
 #define OBSTACLE_TURN_TIME_MS 200
 #define ULTRASONIC_TIMEOUT_US 25000
+#define OBSTACLE_CONFIRM_COUNT 3
+#define OBSTACLE_CLEAR_COUNT 2
 
 HardwareSerial NanoSerial(1);
 HardwareSerial HC05Serial(2);
@@ -63,6 +65,12 @@ bool obstacleBlinkState = false;
 bool obstacleDetectedState = false;
 float ultrasonicDistanceA = -1.0;
 float ultrasonicDistanceB = -1.0;
+int obstacleAConfirmCount = 0;
+int obstacleBConfirmCount = 0;
+int obstacleAClearCount = 0;
+int obstacleBClearCount = 0;
+bool stableObstacleA = false;
+bool stableObstacleB = false;
 
 bool isNavigationCommand(char command) {
   return command == 'F' || command == 'B' ||
@@ -216,8 +224,51 @@ void handleObstacle() {
   float distanceA = ultrasonicDistanceA;
   float distanceB = ultrasonicDistanceB;
 
-  bool obstacleA = distanceA >= 0 && distanceA < OBSTACLE_DISTANCE_CM;
-  bool obstacleB = distanceB >= 0 && distanceB < OBSTACLE_DISTANCE_CM;
+  bool rawObstacleA = distanceA >= 0 && distanceA < OBSTACLE_DISTANCE_CM;
+  bool rawObstacleB = distanceB >= 0 && distanceB < OBSTACLE_DISTANCE_CM;
+
+  // Require several consecutive readings before declaring an obstacle.
+  // This prevents ultrasonic noise/spikes from triggering the LEDs or turn.
+  if (rawObstacleA) {
+    obstacleAConfirmCount++;
+    obstacleAClearCount = 0;
+  } else {
+    obstacleAConfirmCount = 0;
+    if (stableObstacleA) {
+      obstacleAClearCount++;
+    } else {
+      obstacleAClearCount = 0;
+    }
+  }
+
+  if (rawObstacleB) {
+    obstacleBConfirmCount++;
+    obstacleBClearCount = 0;
+  } else {
+    obstacleBConfirmCount = 0;
+    if (stableObstacleB) {
+      obstacleBClearCount++;
+    } else {
+      obstacleBClearCount = 0;
+    }
+  }
+
+  if (obstacleAConfirmCount >= OBSTACLE_CONFIRM_COUNT) {
+    stableObstacleA = true;
+  }
+  if (obstacleBConfirmCount >= OBSTACLE_CONFIRM_COUNT) {
+    stableObstacleB = true;
+  }
+
+  if (obstacleAClearCount >= OBSTACLE_CLEAR_COUNT) {
+    stableObstacleA = false;
+  }
+  if (obstacleBClearCount >= OBSTACLE_CLEAR_COUNT) {
+    stableObstacleB = false;
+  }
+
+  bool obstacleA = stableObstacleA;
+  bool obstacleB = stableObstacleB;
   bool obstacleDetected = obstacleA || obstacleB;
   obstacleDetectedState = obstacleDetected;
 
